@@ -1,0 +1,24 @@
+# Dependencies
+/node_modules
+
+# Next.js build output
+/.next/
+/out/
+
+# Environment files and local runtime storage
+.env
+.env.local
+.env.*.local
+/uploads/
+
+# Prisma generated files
+/prisma/generated/
+
+# Logs and editor files
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# TypeScript incremental build info
+*.tsbuildinfo

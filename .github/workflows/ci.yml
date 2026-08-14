@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint, typecheck, and build
+    runs-on: ubuntu-latest
+    env:
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+      AUTH_URL: http://localhost:3000
+      DATABASE_URL: postgresql://omnipost:omnipost@localhost:5432/omnipost?schema=public
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: omnipost
+          POSTGRES_USER: omnipost
+          POSTGRES_PASSWORD: omnipost
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U omnipost -d omnipost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4.4.0
+        with:
+          version: 11.13.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm exec prisma generate
+
+      - name: Apply database migrations
+        run: pnpm exec prisma migrate deploy
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
