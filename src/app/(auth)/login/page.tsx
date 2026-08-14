@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
+import { useEffect, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,13 +20,37 @@ import { Label } from "@/components/ui/label";
 
 import { loginUser } from "./actions";
 
+function getOAuthErrorMessage(error: string): string {
+  switch (error) {
+    case "OAuthCallback":
+      return "Google sign-in failed. Please try again.";
+    case "OAuthCreateAccount":
+      return "Unable to create an account with Google. Please try again.";
+    case "AccessDenied":
+      return "Google sign-in was denied. Please try again.";
+    case "Configuration":
+      return "Google sign-in is not configured.";
+    default:
+      return "Google sign-in failed. Please try again.";
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [comingSoonFeature, setComingSoonFeature] = useState<string | null>(null);
+
+  useEffect(() => {
+    const oauthError = searchParams.get("error");
+    if (oauthError) {
+      toast.error(getOAuthErrorMessage(oauthError));
+    }
+  }, [searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,6 +67,11 @@ export default function LoginPage() {
     }
 
     router.push("/dashboard");
+  }
+
+  async function handleGoogleSignIn() {
+    setGoogleLoading(true);
+    await signIn("google", { redirectTo: "/onboarding" });
   }
 
   return (
@@ -125,10 +156,11 @@ export default function LoginPage() {
             type="button"
             variant="outline"
             className="w-full"
-            onClick={() => setComingSoonFeature("Google sign-in")}
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading}
           >
             <GoogleMark />
-            Continue with Google
+            {googleLoading ? "Redirecting…" : "Continue with Google"}
           </Button>
         </section>
 

@@ -81,9 +81,7 @@ Environment variables are documented in SPEC.md §8. Copy `.env.example`, never 
 
 ## Current scope
 
-Build only what the current phase plan describes. Scheduling, calendar, analytics, and real OAuth are **future phases** — the schema already reserves room for t
-hem (full `TargetStatus` enum, `scheduledAt`, `AnalyticsSnapshot`), but do not implement the features until explicitly asked. Prefer the smallest change that sa
-tisfies the current acceptance test.
+Build only what the current phase plan describes. Scheduling, calendar, and analytics are **future phases** — the schema already reserves room for them (full `TargetStatus` enum, `scheduledAt`, `AnalyticsSnapshot`), but do not implement those features until explicitly asked. Google OAuth is now in scope and implemented behind `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`. Prefer the smallest change that satisfies the current acceptance test.
 
 ## Definition of done
 
