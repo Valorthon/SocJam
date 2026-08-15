@@ -68,6 +68,23 @@ Superpowers plugin.
 
    Open [http://localhost:3000](http://localhost:3000).
 
+## Deploying to Railway
+
+The repo includes a `railway.json` config that runs migrations automatically before each deploy.
+
+1. Create a Railway project and add a PostgreSQL service.
+2. Create a new service from this repo.
+3. In the service variables, set at least:
+   - `DATABASE_URL` — use the connection string from the Railway PostgreSQL service.
+   - `AUTH_SECRET` — generate with `openssl rand -base64 32`.
+   - `AUTH_URL` — the public URL of the deployed service.
+   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — only needed for Google OAuth.
+   - `OPENAI_API_KEY` — only needed for real AI calls; leave blank for deterministic mock output.
+   - `MOCK_PLATFORMS="true"` for the current MVP demo.
+4. Deploy. Railway will run `pnpm build`, then `pnpm db:migrate`, then `pnpm start`.
+
+Migrations are applied idempotently by `prisma migrate deploy`; future deploys will only apply new migrations.
+
 ## Environment configuration
 
 Local development reads configuration from `.env`. Start by copying
