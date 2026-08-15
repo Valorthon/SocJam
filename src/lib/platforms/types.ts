@@ -37,6 +37,7 @@ export const publishResultSchema = z.discriminatedUnion("ok", [
 
 export const authCheckResultSchema = z.object({
   active: z.boolean(),
+  account: z.custom<SocialAccount>().optional(),
 });
 
 export const analyticsResultSchema = z.object({

@@ -15,7 +15,7 @@ export interface ComposerMedia {
   url: string;
   type: "IMAGE" | "VIDEO";
   sizeBytes: number;
-  mimeType?: string;
+  mimeType: string;
   width?: number | null;
   height?: number | null;
 }
@@ -108,6 +108,7 @@ export const useComposerStore = create<ComposerStore>()((set) => ({
         url: asset.url,
         type: asset.type,
         sizeBytes: asset.sizeBytes,
+        mimeType: asset.mimeType,
         width: asset.width,
         height: asset.height,
       })),

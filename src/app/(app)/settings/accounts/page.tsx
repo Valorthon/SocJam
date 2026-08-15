@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { AccountCard } from "@/components/features/accounts/AccountCard";
 import { ConnectAccountButton } from "@/components/features/accounts/ConnectAccountButton";
@@ -21,6 +21,9 @@ import {
   PLATFORMS,
   type Platform,
 } from "@/lib/platforms/constraints";
+import { isLinkedInRealEnabled } from "@/lib/platforms/config";
+import { toast } from "sonner";
+import { useRouter, useSearchParams } from "next/navigation";
 
 function AccountListSkeleton() {
   return (
@@ -44,12 +47,59 @@ function AccountListSkeleton() {
   );
 }
 
+const LINKEDIN_OAUTH_URL = "/api/accounts/oauth/linkedin";
+
 export default function ConnectedAccountsPage() {
+  return (
+    <Suspense fallback={<AccountListSkeleton />}>
+      <ConnectedAccountsPageInner />
+    </Suspense>
+  );
+}
+
+function ConnectedAccountsPageInner() {
   const accountsQuery = useAccounts();
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
   const [addPlatformOpen, setAddPlatformOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const accounts = accountsQuery.data ?? [];
+
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+
+    if (success === "linkedin") {
+      toast.success("LinkedIn account connected successfully.");
+    }
+
+    if (error) {
+      const messages: Record<string, string> = {
+        unauthorized: "You must be signed in to connect an account.",
+        invalid_request: "Invalid OAuth request. Please try again.",
+        invalid_state: "Security validation failed. Please try again.",
+        not_configured: "LinkedIn OAuth is not configured.",
+        access_denied: "LinkedIn authorization was cancelled.",
+        account_already_connected: "This account is already connected.",
+        unable_to_connect: "Unable to connect LinkedIn account. Please try again.",
+      };
+      toast.error(messages[error] ?? "Unable to connect account. Please try again.");
+    }
+
+    if (success || error) {
+      router.replace("/settings/accounts");
+    }
+  }, [searchParams, router]);
+
+  function startPlatformConnect(platform: Platform) {
+    if (platform === "LINKEDIN" && isLinkedInRealEnabled()) {
+      window.location.href = LINKEDIN_OAUTH_URL;
+      return;
+    }
+
+    setSelectedPlatform(platform);
+  }
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
@@ -110,13 +160,13 @@ export default function ConnectedAccountsPage() {
               );
 
               if (platformAccounts.length === 0) {
-                return [
-                  <AccountCard
-                    key={platform}
-                    platform={platform}
-                    onConnect={setSelectedPlatform}
-                  />,
-                ];
+              return [
+                <AccountCard
+                  key={platform}
+                  platform={platform}
+                  onConnect={startPlatformConnect}
+                />,
+              ];
               }
 
               return platformAccounts.map((account) => (
@@ -124,7 +174,7 @@ export default function ConnectedAccountsPage() {
                   key={account.id}
                   platform={platform}
                   account={account}
-                  onConnect={setSelectedPlatform}
+                  onConnect={startPlatformConnect}
                 />
               ));
             })}
@@ -137,8 +187,8 @@ export default function ConnectedAccountsPage() {
           <DialogHeader>
             <DialogTitle>Add a platform</DialogTitle>
             <DialogDescription>
-              Choose a platform, then authorize a mock account to connect it to
-              OmniPost.
+              Choose a platform to connect it to OmniPost. LinkedIn uses real
+              OAuth when credentials are configured.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -153,7 +203,7 @@ export default function ConnectedAccountsPage() {
                   className="h-auto justify-start gap-3 px-3 py-3 text-left"
                   onClick={() => {
                     setAddPlatformOpen(false);
-                    setSelectedPlatform(platform);
+                    startPlatformConnect(platform);
                   }}
                 >
                   <PlatformIcon platform={platform} className="size-7 text-[10px]" />

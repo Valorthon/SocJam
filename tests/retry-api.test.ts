@@ -5,7 +5,16 @@ import type { PostWithRelations } from "../src/lib/posts";
 import { postDetailResponseSchema } from "../src/types";
 
 const account: SocialAccount = {
-  id: "account-1", userId: "user-1", platform: "X", handle: "@omnipost", accessToken: "token", status: "ACTIVE",
+  id: "account-1",
+  userId: "user-1",
+  platform: "X",
+  handle: "@omnipost",
+  accessToken: "token",
+  refreshToken: null,
+  expiresAt: null,
+  scope: null,
+  platformUserId: null,
+  status: "ACTIVE",
 };
 
 function postFixture(): PostWithRelations {

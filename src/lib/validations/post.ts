@@ -11,7 +11,7 @@ export const postTargetInputSchema = z.object({
 export const mediaInputSchema = z.object({
   url: z.string().url("Media URL must be valid"),
   type: z.enum(["IMAGE", "VIDEO"]),
-  mimeType: z.string().trim().min(1).optional(),
+  mimeType: z.string().trim().min(1),
   sizeBytes: z.number().int().nonnegative().max(MAX_UPLOAD_BYTES, MAX_UPLOAD_SIZE_MESSAGE),
   width: z.number().int().nonnegative().nullable().optional(),
   height: z.number().int().nonnegative().nullable().optional(),

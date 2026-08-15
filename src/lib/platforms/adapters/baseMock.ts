@@ -86,6 +86,7 @@ export class BaseMockAdapter implements SocialPlatformAdapter {
       input.text,
       input.media.map((asset) => ({
         type: asset.type,
+        mimeType: asset.mimeType,
         sizeBytes: asset.sizeBytes,
       })),
     );
@@ -131,6 +132,7 @@ export class BaseMockAdapter implements SocialPlatformAdapter {
     // Token expiry is not modeled by mocks; RECONNECT_REQUIRED is the inactive test state.
     return authCheckResultSchema.parse({
       active: account.status === "ACTIVE",
+      account,
     });
   }
 

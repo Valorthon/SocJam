@@ -93,6 +93,7 @@ export function toPostDetailDto(post: PostWithRelations): PostDetailDto {
       id: asset.id,
       url: asset.url,
       type: asset.type,
+      mimeType: asset.mimeType,
       sizeBytes: asset.sizeBytes,
       width: asset.width,
       height: asset.height,

@@ -10,6 +10,10 @@ import {
   type AccountRouteDependencies,
 } from "../src/lib/accounts/route-handlers";
 
+process.env.TOKEN_ENCRYPTION_KEY =
+  process.env.TOKEN_ENCRYPTION_KEY ??
+  "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
+
 const userId = "user-1";
 const missingAccountId = "cly8kq9f10000abcd12345678";
 const accountWithTargetsId = "cly8kq9f10001abcd12345678";
@@ -26,6 +30,10 @@ function createSocialAccount(id: string, handle: string): SocialAccount {
     platform: "X",
     handle,
     accessToken: "mock-token",
+    refreshToken: null,
+    expiresAt: null,
+    scope: null,
+    platformUserId: null,
     status: "ACTIVE",
   };
 }
@@ -58,9 +66,16 @@ async function run(): Promise<void> {
           });
         }
 
-        const account = { id: removableAccountId, ...data };
+        const account = {
+          id: removableAccountId,
+          ...data,
+          refreshToken: null,
+          expiresAt: null,
+          scope: null,
+          platformUserId: null,
+        };
         accounts.push(account);
-        return account;
+        return account as SocialAccount;
       },
     } as unknown as AccountsRouteDependencies["socialAccounts"],
     createMockAccessToken: () => "generated-token",

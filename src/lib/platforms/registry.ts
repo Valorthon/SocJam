@@ -1,9 +1,11 @@
 import { type Platform } from "@/lib/platforms/constraints";
+import { linkedInAdapter } from "@/lib/platforms/adapters/linkedin";
 import { mockFacebookAdapter } from "@/lib/platforms/adapters/mockFacebook";
 import { mockInstagramAdapter } from "@/lib/platforms/adapters/mockInstagram";
 import { mockLinkedInAdapter } from "@/lib/platforms/adapters/mockLinkedIn";
 import { mockTikTokAdapter } from "@/lib/platforms/adapters/mockTikTok";
 import { mockXAdapter } from "@/lib/platforms/adapters/mockX";
+import { isLinkedInRealEnabled } from "@/lib/platforms/config";
 import { type SocialPlatformAdapter } from "@/lib/platforms/types";
 
 const mockAdapters: Record<Platform, SocialPlatformAdapter> = {
@@ -15,8 +17,14 @@ const mockAdapters: Record<Platform, SocialPlatformAdapter> = {
 };
 
 export function getPlatformAdapter(platform: Platform): SocialPlatformAdapter {
+  if (platform === "LINKEDIN" && isLinkedInRealEnabled()) {
+    return linkedInAdapter;
+  }
+
   if (process.env.MOCK_PLATFORMS !== "true") {
-    throw new Error("Mock platform adapters are disabled and real adapters are not configured.");
+    throw new Error(
+      `Mock platform adapters are disabled and ${platform} real adapter is not configured.`,
+    );
   }
 
   return mockAdapters[platform];
