@@ -1,6 +1,13 @@
 import type { PostListItemDto } from "@/types";
 
-type DraftCandidate = Pick<PostListItemDto, "id" | "status" | "updatedAt">;
+export type DraftCandidate = Pick<
+  PostListItemDto,
+  "id" | "status" | "baseText" | "targets" | "updatedAt"
+>;
+
+export function isDraftEmpty(draft: DraftCandidate): boolean {
+  return draft.baseText.trim().length === 0 && draft.targets.length === 0;
+}
 
 export function shouldOfferDraftResume(
   hasRequestedDraft: boolean,
@@ -20,6 +27,7 @@ export function getLatestDraftId(posts: readonly DraftCandidate[]): string | nul
   for (const post of posts) {
     if (
       post.status === "DRAFT" &&
+      !isDraftEmpty(post) &&
       (!latestDraft || post.updatedAt > latestDraft.updatedAt)
     ) {
       latestDraft = post;
