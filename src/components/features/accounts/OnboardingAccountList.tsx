@@ -10,10 +10,22 @@ import {
   PLATFORMS,
   type Platform,
 } from "@/lib/platforms/constraints";
+import { isLinkedInRealEnabled } from "@/lib/platforms/config";
+
+const LINKEDIN_OAUTH_URL = "/api/accounts/oauth/linkedin";
 
 export function OnboardingAccountList() {
   const router = useRouter();
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
+
+  function startConnect(platform: Platform) {
+    if (platform === "LINKEDIN" && isLinkedInRealEnabled()) {
+      window.location.href = LINKEDIN_OAUTH_URL;
+      return;
+    }
+
+    setSelectedPlatform(platform);
+  }
 
   return (
     <>
@@ -42,7 +54,7 @@ export function OnboardingAccountList() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setSelectedPlatform(platform)}
+                onClick={() => startConnect(platform)}
               >
                 Connect
               </Button>

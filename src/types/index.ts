@@ -33,6 +33,7 @@ export const mediaAssetDtoSchema = z.object({
   id: z.string(),
   url: z.string(),
   type: z.enum(mediaTypes),
+  mimeType: z.string(),
   sizeBytes: z.number().int().nonnegative(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),

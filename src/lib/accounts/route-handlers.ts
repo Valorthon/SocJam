@@ -9,6 +9,7 @@ import {
   connectAccountSchema,
 } from "@/lib/validations/account";
 import { validationErrorSchema } from "@/lib/validations/common";
+import { encryptToken } from "@/lib/tokens/crypto";
 import {
   accountListResponseSchema,
   accountResponseSchema,
@@ -23,6 +24,7 @@ export interface AccountsRouteDependencies {
   getAuthenticatedUser: typeof getAuthenticatedUser;
   socialAccounts: Pick<typeof db.socialAccount, "findMany" | "create">;
   createMockAccessToken: () => string;
+  encryptToken?: (token: string) => string;
 }
 
 type DisconnectAccountResult = {
@@ -85,6 +87,7 @@ function invalidRequestResponse(error?: z.ZodError): NextResponse {
 
 export function createAccountsRouteHandlers(dependencies: AccountsRouteDependencies) {
   const { createMockAccessToken, getAuthenticatedUser, socialAccounts } = dependencies;
+  const encrypt = dependencies.encryptToken ?? encryptToken;
 
   async function GET(): Promise<NextResponse> {
     const authentication = await getAuthenticatedUser();
@@ -142,7 +145,7 @@ export function createAccountsRouteHandlers(dependencies: AccountsRouteDependenc
           userId: authentication.userId,
           platform: input.data.platform,
           handle: input.data.handle,
-          accessToken: `mock_${createMockAccessToken()}`,
+          accessToken: encrypt(`mock_${createMockAccessToken()}`),
           status: "ACTIVE",
         },
       });

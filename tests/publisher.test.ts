@@ -17,7 +17,18 @@ type Target = {
 };
 
 function account(id: string, platform: Platform): SocialAccount {
-  return { id, userId: "user-1", platform, handle: `@${id}`, accessToken: "token", status: "ACTIVE" };
+  return {
+    id,
+    userId: "user-1",
+    platform,
+    handle: `@${id}`,
+    accessToken: "token",
+    refreshToken: null,
+    expiresAt: null,
+    scope: null,
+    platformUserId: null,
+    status: "ACTIVE",
+  };
 }
 
 function fixture(): { post: { id: string; userId: string; idempotencyKey: string; status: PostStatus; targets: Target[]; media: MediaAsset[] }; result: PostWithRelations } {

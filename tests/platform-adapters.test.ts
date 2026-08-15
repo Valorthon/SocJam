@@ -9,6 +9,10 @@ const activeAccount: SocialAccount = {
   platform: "X",
   handle: "@omnipost",
   accessToken: "mock-token",
+  refreshToken: null,
+  expiresAt: null,
+  scope: null,
+  platformUserId: null,
   status: "ACTIVE",
 };
 
@@ -41,6 +45,7 @@ const image: MediaAsset = {
   postId: "post-1",
   url: "https://omnipost.local/api/uploads/image.jpg",
   type: "IMAGE",
+  mimeType: "image/jpeg",
   sizeBytes: 1024,
   width: null,
   height: null,
@@ -58,7 +63,10 @@ async function run(): Promise<void> {
     const repeatedResult = await xAdapter.publishPost(input);
 
     assert.deepEqual(repeatedResult, firstResult);
-    assert.deepEqual(await xAdapter.checkAuth(activeAccount), { active: true });
+    assert.deepEqual(await xAdapter.checkAuth(activeAccount), {
+      active: true,
+      account: activeAccount,
+    });
     assert.equal(getMockFailureRate("1"), 1);
     assert.equal(getMockFailureRate("invalid"), 0);
 

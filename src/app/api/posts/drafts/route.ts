@@ -23,7 +23,7 @@ export const POST = createDraftRouteHandler({
         idempotencyKey: input.idempotencyKey,
         targets: { create: input.targets },
         media: {
-          create: input.media.map(({ mimeType: _mimeType, ...media }) => media),
+          create: input.media,
         },
       },
       include: postWithRelationsInclude,
@@ -40,7 +40,7 @@ export const POST = createDraftRouteHandler({
           },
           media: {
             deleteMany: {},
-            create: input.media.map(({ mimeType: _mimeType, ...media }) => media),
+            create: input.media,
           },
         },
         include: postWithRelationsInclude,

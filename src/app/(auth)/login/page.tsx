@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,14 @@ function getOAuthErrorMessage(error: string): string {
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageSkeleton />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -202,6 +210,21 @@ export default function LoginPage() {
           </DialogHeader>
         </DialogContent>
       </Dialog>
+    </main>
+  );
+}
+
+function LoginPageSkeleton() {
+  return (
+    <main className="flex min-h-screen items-center justify-center px-4 py-10 sm:px-6">
+      <div className="flex w-full max-w-[360px] flex-col gap-8">
+        <div className="mx-auto size-[60px] animate-pulse rounded-full bg-muted" />
+        <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+          <div className="h-10 animate-pulse rounded bg-muted" />
+          <div className="h-10 animate-pulse rounded bg-muted" />
+          <div className="h-10 animate-pulse rounded bg-muted" />
+        </div>
+      </div>
     </main>
   );
 }

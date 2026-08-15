@@ -87,12 +87,14 @@ export function createPublisher(dependencies: PublisherDependencies) {
           continue;
         }
 
+        const account = auth.account ?? target.account;
+
         const result = await adapter.publishPost({
           targetId: target.id,
           idempotencyKey: post.idempotencyKey,
           text: target.adaptedText,
           media: post.media,
-          account: target.account,
+          account,
         });
 
         if (result.ok) {

@@ -15,6 +15,10 @@ const account: SocialAccount = {
   platform: "X",
   handle: "@omnipost",
   accessToken: "mock-token",
+  refreshToken: null,
+  expiresAt: null,
+  scope: null,
+  platformUserId: null,
   status: "ACTIVE",
 };
 
