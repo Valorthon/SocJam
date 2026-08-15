@@ -2,6 +2,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import type { User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import argon2 from "argon2";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -125,7 +126,7 @@ export const authConfig = {
   },
   pages: {
     signIn: "/login",
-    newUser: "/settings/accounts",
+    newUser: "/onboarding",
   },
   providers: [
     CredentialsProvider({
@@ -138,7 +139,8 @@ export const authConfig = {
         return authorizeCredentials(credentials);
       },
     }),
-  ],
+    buildGoogleProvider(),
+  ].filter((provider): provider is NonNullable<typeof provider> => provider !== null),
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
@@ -156,6 +158,37 @@ export const authConfig = {
 } satisfies NextAuthConfig;
 
 export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+
+function getGoogleCredentials(): {
+  clientId: string;
+  clientSecret: string;
+} | null {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+
+  return { clientId, clientSecret };
+}
+
+export function isGoogleOAuthEnabled(): boolean {
+  return getGoogleCredentials() !== null;
+}
+
+function buildGoogleProvider() {
+  const credentials = getGoogleCredentials();
+  if (!credentials) {
+    return null;
+  }
+
+  return GoogleProvider({
+    clientId: credentials.clientId,
+    clientSecret: credentials.clientSecret,
+    allowDangerousEmailAccountLinking: true,
+  });
+}
 
 export async function getAuthenticatedUser(): Promise<AuthenticatedUserResult> {
   const session = await auth();
