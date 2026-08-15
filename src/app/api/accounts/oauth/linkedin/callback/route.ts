@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { LinkedInAdapter } from "@/lib/platforms/adapters/linkedin";
 import {
   exchangeCodeForToken,
   fetchMemberProfile,

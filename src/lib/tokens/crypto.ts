@@ -80,7 +80,3 @@ export function decryptToken(cipher: string): string {
 
   return plaintext.toString("utf8");
 }
-
-export function isEncryptedToken(value: string): boolean {
-  return value.startsWith(ENCRYPTION_PREFIX);
-}

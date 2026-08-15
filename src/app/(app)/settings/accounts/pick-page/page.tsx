@@ -67,14 +67,16 @@ export default function PickPagePage() {
   const finalize = useFinalizeMetaConnection();
   const [selected, setSelected] = useState<string | null>(null);
 
-  const pages = pagesQuery.data ?? [];
+  const pages = pagesQuery.data?.pages ?? [];
+  const platform = pagesQuery.data?.platform;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) return;
     try {
       await finalize.mutateAsync({ pageId: selected });
-      router.push("/settings/accounts?oauth=success");
+      const successParam = platform ? platform.toLowerCase() : "success";
+      router.push(`/settings/accounts?success=${successParam}`);
     } catch {
       // Mutation surfaces its error in finalize.error.
     }

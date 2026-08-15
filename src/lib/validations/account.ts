@@ -11,19 +11,8 @@ export const accountIdParamsSchema = z.object({
 });
 
 export type ConnectAccountInput = z.infer<typeof connectAccountSchema>;
-export type AccountIdParams = z.infer<typeof accountIdParamsSchema>;
 
 // OAuth (Phase 2a — Meta). All schemas are shared by client and server.
-export const oauthStateSchema = z
-  .object({
-    userId: z.string().min(1),
-    platform: z.enum(["FACEBOOK", "INSTAGRAM"]),
-    pkceVerifier: z.string().min(43).max(128),
-  })
-  .strict();
-
-export type OauthState = z.infer<typeof oauthStateSchema>;
-
 export const metaPageSchema = z
   .object({
     id: z.string().min(1),
@@ -34,9 +23,12 @@ export const metaPageSchema = z
 
 export type MetaPage = z.infer<typeof metaPageSchema>;
 
-export const metaPageListResponseSchema = z.object({
-  pages: z.array(metaPageSchema),
-}).strict();
+export const metaPageListResponseSchema = z
+  .object({
+    pages: z.array(metaPageSchema),
+    platform: z.enum(["FACEBOOK", "INSTAGRAM"]),
+  })
+  .strict();
 
 export type MetaPageListResponse = z.infer<typeof metaPageListResponseSchema>;
 
@@ -45,8 +37,6 @@ export const finalizeOauthSchema = z
     pageId: z.string().min(1),
   })
   .strict();
-
-export type FinalizeOauthInput = z.infer<typeof finalizeOauthSchema>;
 
 export const connectModeResponseSchema = z
   .object({

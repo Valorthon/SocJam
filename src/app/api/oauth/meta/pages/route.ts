@@ -35,6 +35,9 @@ export async function GET(): Promise<NextResponse> {
   }
 
   return NextResponse.json(
-    metaPageListResponseSchema.parse({ pages: cookie.pages }),
+    metaPageListResponseSchema.parse({
+      pages: cookie.pages,
+      platform: cookie.platform,
+    }),
   );
 }

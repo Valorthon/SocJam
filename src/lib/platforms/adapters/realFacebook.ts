@@ -4,7 +4,6 @@ import {
   validatePost as validatePlatformPost,
 } from "@/lib/platforms/constraints";
 import {
-  analyticsResultSchema,
   authCheckResultSchema,
   publishResultSchema,
   type AnalyticsResult,
@@ -337,5 +336,3 @@ export class RealFacebookAdapter implements SocialPlatformAdapter {
 }
 
 export const realFacebookAdapter = new RealFacebookAdapter();
-
-export { analyticsResultSchema };

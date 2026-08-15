@@ -11,6 +11,7 @@ import {
   type ConnectAccountInput,
   type ConnectModeResponse,
   type MetaPage,
+  type MetaPageListResponse,
 } from "@/lib/validations/account";
 import {
   accountListResponseSchema,
@@ -66,13 +67,13 @@ async function disconnectAccount(accountId: string): Promise<void> {
   });
 }
 
-async function fetchMetaPages(): Promise<MetaPage[]> {
+async function fetchMetaPages(): Promise<MetaPageListResponse> {
   const response = await requestJson(
     "/api/oauth/meta/pages",
     { method: "GET" },
     metaPageListResponseSchema,
   );
-  return response.pages;
+  return response;
 }
 
 async function fetchConnectMode(): Promise<ConnectModeResponse> {
@@ -151,7 +152,17 @@ export function useFinalizeMetaConnection() {
   return useMutation({
     mutationFn: finalizeMetaConnection,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: accountQueryKeys.all });
+      // Invalidate ONLY the connected-accounts list (`["accounts"]`) — by
+      // default invalidate's prefix match would also flag the meta-pages
+      // picker query (`["accounts","meta","pages"]`). Finalize deletes the
+      // op_meta_pages cookie, so a refetch of the picker would 410 and flash
+      // "session expired" on the picker while the screen is navigating back
+      // to connected accounts. `exact: true` keeps the spinner on the
+      // accounts list refetch and leaves the picker's stale cache untouched.
+      await queryClient.invalidateQueries({
+        queryKey: accountQueryKeys.all,
+        exact: true,
+      });
     },
   });
 }
