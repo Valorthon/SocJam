@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { z } from "zod";
 
-const ALLOWED_FILE_NAME = "tiktokiJz4a8Oo1RaDbyIH2DEdDZFjHfdwDp7P.txt";
+const ALLOWED_FILE_NAME = "tiktokmX5fAgTqLBACKcxKOpbg69K2ywz3TjiP.txt";
 
 const paramsSchema = z.object({
   filename: z.literal(ALLOWED_FILE_NAME),
