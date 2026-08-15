@@ -28,9 +28,7 @@ export const metaPageSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1),
-    access_token: z.string().min(1),
     hasInstagram: z.boolean().default(false),
-    instagramBusinessAccountId: z.string().nullable().default(null),
   })
   .strict();
 

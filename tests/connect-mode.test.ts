@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {
   createConnectModeRouteHandlers,
   type ConnectModeDependencies,
-} from "../src/app/api/accounts/connect-mode/route";
+} from "../src/lib/accounts/connect-mode-handlers";
 
 const userId = "user-1";
 

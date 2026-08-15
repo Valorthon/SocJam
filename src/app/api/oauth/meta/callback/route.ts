@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   decodeState,
+  encodePageListCookie,
   exchangeCodeForToken,
   getLongLivedUserToken,
   listPages,
@@ -81,18 +82,20 @@ export async function GET(request: Request): Promise<NextResponse> {
     return denyRoute("no_pages");
   }
 
-  // Stash everything we need to finalize in a short-lived cookie. We keep only
-  // the per-Page tokens + Page metadata. The user picks a Page next.
+  // Stash only the slim, token-free picker payload in the page-list cookie.
+  // Per-Page access tokens are re-fetched at finalize via listPages(config,
+  // userToken) — storing them in a cookie risks exceeding the ~4KB per-cookie
+  // browser limit for accounts that manage many Pages, and raw JSON values
+  // with spaces/braces break RFC 6265, so we base64url-encode the payload
+  // (same safe alphabet the state cookie uses).
   const cookiePayload = {
     metaUserId: state.userId,
     platform: state.platform,
-    userTokenForRefresh: longLivedUserToken,
+    userToken: longLivedUserToken,
     pages: pages.map((page) => ({
       id: page.id,
       name: page.name,
-      access_token: page.accessToken,
       hasInstagram: page.instagramBusinessAccountId !== null,
-      instagramBusinessAccountId: page.instagramBusinessAccountId,
     })),
   };
 
@@ -102,13 +105,17 @@ export async function GET(request: Request): Promise<NextResponse> {
   );
 
   const response = NextResponse.redirect(redirectUrl, 302);
-  cookieStore.set(metaOauthCookies.pageList, JSON.stringify(cookiePayload), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: metaOauthCookies.ttlSeconds,
-  });
+  cookieStore.set(
+    metaOauthCookies.pageList,
+    encodePageListCookie(cookiePayload),
+    {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: metaOauthCookies.ttlSeconds,
+    },
+  );
   // Consume the state cookie so it can't be replayed.
   cookieStore.set(metaOauthCookies.state, "", {
     httpOnly: true,

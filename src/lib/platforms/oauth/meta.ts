@@ -368,3 +368,50 @@ export const metaOauthCookies = {
   pageList: PAGE_LIST_COOKIE,
   ttlSeconds: COOKIE_TTL_SECONDS,
 } as const;
+
+/**
+ * Intermediate page-list cookie payload.
+ *
+ * Stored base64url-encoded (RFC 4648 §5 safe alphabet for cookie values —
+ * no spaces, quotes, or braces that break RFC 6265 cookie-octet rules) and
+ * slimmed to only what the picker UI + finalize need. Per-Page access tokens
+ * are NOT kept here — finalize re-fetches `listPages` with `userToken` to
+ * grab the chosen Page's access token at finalize time. This keeps the cookie
+ * well under the browser's ~4KB per-cookie limit even for accounts that
+ * manage many Pages (each Page contributes only ~60 bytes here vs. ~350 with
+ * a token).
+ */
+export interface PageListCookiePayload {
+  metaUserId: string;
+  platform: "FACEBOOK" | "INSTAGRAM";
+  userToken: string;
+  pages: Array<{ id: string; name: string; hasInstagram: boolean }>;
+}
+
+const pageListCookiePayloadSchema = z.object({
+  metaUserId: z.string().min(1),
+  platform: z.enum(["FACEBOOK", "INSTAGRAM"]),
+  userToken: z.string().min(1),
+  pages: z.array(
+    z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      hasInstagram: z.boolean(),
+    }),
+  ),
+});
+
+export function encodePageListCookie(payload: PageListCookiePayload): string {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+}
+
+export function decodePageListCookie(raw: string): PageListCookiePayload | null {
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    const json = Buffer.from(raw, "base64url").toString("utf8");
+    const parsed = pageListCookiePayloadSchema.safeParse(JSON.parse(json));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}

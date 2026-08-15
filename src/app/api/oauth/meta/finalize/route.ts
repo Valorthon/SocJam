@@ -1,23 +1,17 @@
 import { Prisma } from "@prisma/client";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { encryptToken } from "@/lib/tokens/crypto";
 import {
+  decodePageListCookie,
   getInstagramAccount,
+  listPages,
   loadMetaConfig,
   metaOauthCookies,
 } from "@/lib/platforms/oauth/meta";
-import { finalizeOauthSchema, metaPageSchema } from "@/lib/validations/account";
-
-interface PageListCookie {
-  metaUserId: string;
-  platform: "FACEBOOK" | "INSTAGRAM";
-  userTokenForRefresh: string;
-  pages: Array<z.infer<typeof metaPageSchema>>;
-}
+import { finalizeOauthSchema } from "@/lib/validations/account";
 
 const DAY_SECONDS = 24 * 60 * 60;
 
@@ -48,10 +42,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  let cookie: PageListCookie;
-  try {
-    cookie = JSON.parse(raw) as PageListCookie;
-  } catch {
+  const cookie = decodePageListCookie(raw);
+  if (!cookie) {
     return NextResponse.json(
       { error: "Your connect session expired. Please try again." },
       { status: 410 },
@@ -62,11 +54,35 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const page = cookie.pages.find((item) => item.id === input.data.pageId);
-  if (!page) {
+  const chosen = cookie.pages.find((item) => item.id === input.data.pageId);
+  if (!chosen) {
     return NextResponse.json(
       { error: "Selected page is no longer available." },
       { status: 400 },
+    );
+  }
+
+  // The slim cookie doesn't carry per-Page access tokens — re-fetch /me/accounts
+  // with the long-lived user token to pick up the chosen Page's access token
+  // (and its instagram_business_account id for IG connect).
+  const config = loadMetaConfig();
+  let pageAccessToken: string;
+  let instagramBusinessAccountId: string | null;
+  try {
+    const freshPages = await listPages(config, cookie.userToken);
+    const fresh = freshPages.find((p) => p.id === chosen.id);
+    if (!fresh) {
+      return NextResponse.json(
+        { error: "Selected page is no longer accessible to your Facebook account." },
+        { status: 400 },
+      );
+    }
+    pageAccessToken = fresh.accessToken;
+    instagramBusinessAccountId = fresh.instagramBusinessAccountId;
+  } catch {
+    return NextResponse.json(
+      { error: "Unable to load Pages from Facebook. Please retry." },
+      { status: 502 },
     );
   }
 
@@ -75,7 +91,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   let handle: string;
   let platformUserId: string;
   if (cookie.platform === "INSTAGRAM") {
-    if (!page.instagramBusinessAccountId) {
+    if (!instagramBusinessAccountId) {
       return NextResponse.json(
         {
           error:
@@ -88,9 +104,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     try {
       const ig = await getInstagramAccount(
-        loadMetaConfig(),
-        page.instagramBusinessAccountId,
-        page.access_token,
+        config,
+        instagramBusinessAccountId,
+        pageAccessToken,
       );
       handle = `@${ig.username}`;
       platformUserId = ig.id;
@@ -101,8 +117,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
   } else {
-    handle = page.name;
-    platformUserId = page.id;
+    handle = chosen.name;
+    platformUserId = chosen.id;
   }
 
   // Encrypt tokens before persisting. accessToken holds the Page access token
@@ -111,8 +127,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   let accessTokenEncrypted: string;
   let refreshTokenEncrypted: string;
   try {
-    accessTokenEncrypted = encryptToken(page.access_token);
-    refreshTokenEncrypted = encryptToken(cookie.userTokenForRefresh);
+    accessTokenEncrypted = encryptToken(pageAccessToken);
+    refreshTokenEncrypted = encryptToken(cookie.userToken);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to encrypt tokens." },
@@ -135,10 +151,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   ].join(" ");
 
   try {
-    // upsert by the (userId, platform, platformUserId) unique constraint that
-    // main's migration `add_social_account_token_fields` does NOT include.
-    // We fall back to the existing unique (userId, platform, handle) and
-    // create if not found.
+    // Match by (userId, platform, platformUserId) — main's migration didn't add
+    // a unique constraint on that triple, so use findFirst + update/create.
     const existing = await db.socialAccount.findFirst({
       where: {
         userId: authentication.userId,

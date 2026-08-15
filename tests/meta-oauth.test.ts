@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import {
   buildAuthUrl,
+  decodePageListCookie,
   decodeState,
+  encodePageListCookie,
   encodeState,
   generatePkceVerifier,
   pkceChallenge,
   type MetaConfig,
+  type PageListCookiePayload,
 } from "../src/lib/platforms/oauth/meta";
 
 const config: MetaConfig = {
@@ -61,6 +64,30 @@ async function run(): Promise<void> {
   const scope = parsed.searchParams.get("scope") ?? "";
   assert.ok(scope.includes("pages_manage_posts"));
   assert.ok(scope.includes("instagram_content_publish"));
+
+  // --- Page-list cookie encode/decode round trip ---
+  const payload: PageListCookiePayload = {
+    metaUserId: "user-1",
+    platform: "FACEBOOK",
+    userToken: "long-lived-user-token-abc123",
+    pages: [
+      { id: "page-1", name: "Acme Page with spaces & symbols", hasInstagram: false },
+      { id: "page-2", name: "Café — Accénted", hasInstagram: true },
+    ],
+  };
+  const encoded = encodePageListCookie(payload);
+  // base64url alphabet only — no spaces, braces, or quotes (cookie-safe).
+  assert.ok(/^[A-Za-z0-9_-]*$/.test(encoded), "cookie value must be base64url");
+  const cookieDecoded = decodePageListCookie(encoded);
+  assert.deepEqual(cookieDecoded, payload);
+
+  // Tamper / garbage → null (no throw).
+  assert.equal(decodePageListCookie(""), null);
+  assert.equal(decodePageListCookie("not-valid-base64!"), null);
+  assert.equal(decodePageListCookie("aGVsbG8"), null); // valid base64 but not JSON
+  // Missing required field → null.
+  const badPayload = { ...payload, userToken: "" };
+  assert.equal(decodePageListCookie(encodePageListCookie(badPayload as never)), null);
 
   console.log("Meta OAuth test passed.");
 }
