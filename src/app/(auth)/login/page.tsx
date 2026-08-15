@@ -155,7 +155,7 @@ export default function LoginPage() {
           <Button
             type="button"
             variant="outline"
-            className="w-full"
+            className="w-full gap-2"
             onClick={handleGoogleSignIn}
             disabled={googleLoading}
           >
