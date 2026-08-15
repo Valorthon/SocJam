@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -50,8 +49,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   const authUrl = buildAuthUrl(config, state, pkceVerifier);
 
   const response = NextResponse.redirect(authUrl, 302);
-  const cookieStore = await cookies();
-  cookieStore.set(metaOauthCookies.state, state, {
+  // Set the state cookie directly on the response — deterministic in every
+  // Next 14 build (see callback route for rationale).
+  response.cookies.set(metaOauthCookies.state, state, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

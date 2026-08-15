@@ -197,8 +197,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       },
       { status: 201 },
     );
-    // Consume the page-list cookie so finalize can't be replayed.
-    cookieStore.set(metaOauthCookies.pageList, "", {
+    // Consume the page-list cookie so finalize can't be replayed. Set the
+    // deletion on the response object for deterministic delivery.
+    response.cookies.set(metaOauthCookies.pageList, "", {
       httpOnly: true,
       sameSite: "lax",
       path: "/",

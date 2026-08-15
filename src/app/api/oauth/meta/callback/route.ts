@@ -105,7 +105,11 @@ export async function GET(request: Request): Promise<NextResponse> {
   );
 
   const response = NextResponse.redirect(redirectUrl, 302);
-  cookieStore.set(
+  // Set cookies directly on the response object — mutations via the cookies()
+  // store don't reliably merge into a custom NextResponse.redirect in Next 14,
+  // so the browser can silently drop them. response.cookies.set() stamps the
+  // Set-Cookie header onto the outgoing 302 deterministically.
+  response.cookies.set(
     metaOauthCookies.pageList,
     encodePageListCookie(cookiePayload),
     {
@@ -117,7 +121,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     },
   );
   // Consume the state cookie so it can't be replayed.
-  cookieStore.set(metaOauthCookies.state, "", {
+  response.cookies.set(metaOauthCookies.state, "", {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
