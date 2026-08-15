@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LEGAL } from "@/lib/legal/constants";
 import {
   ArrowRight,
   Layers3,
@@ -128,8 +129,28 @@ export default function HomePage() {
       </main>
 
       <footer className="relative z-10 border-t border-white/[0.07]">
-        <div className="mx-auto max-w-7xl px-5 py-7 text-center text-sm text-muted-foreground sm:px-8 lg:px-10">
-          © {new Date().getFullYear()} All rights reserved.
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-5 py-7 text-sm text-muted-foreground sm:flex-row sm:px-8 lg:px-10">
+          <p>
+            © {new Date().getFullYear()} {LEGAL.appName}. All rights reserved.
+          </p>
+
+          <nav
+            className="flex items-center gap-6"
+            aria-label="Legal links"
+          >
+            <Link
+              href="/terms-of-service"
+              className="hover:text-foreground"
+            >
+              Terms of Service
+            </Link>
+            <Link
+              href="/privacy-policy"
+              className="hover:text-foreground"
+            >
+              Privacy Policy
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>
