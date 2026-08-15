@@ -14,10 +14,6 @@ const activeAccount: SocialAccount = {
   scope: null,
   platformUserId: null,
   status: "ACTIVE",
-  externalAccountId: null,
-  refreshTokenEncrypted: null,
-  tokenExpiresAt: null,
-  metaUserId: null,
 };
 
 const publishedTarget: PostTarget = {

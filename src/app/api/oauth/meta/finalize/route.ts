@@ -1,10 +1,15 @@
 import { Prisma } from "@prisma/client";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { encryptToken, EncryptionConfigError } from "@/lib/crypto";
-import { getInstagramAccount, loadMetaConfig, metaOauthCookies } from "@/lib/platforms/oauth/meta";
+import { encryptToken } from "@/lib/tokens/crypto";
+import {
+  getInstagramAccount,
+  loadMetaConfig,
+  metaOauthCookies,
+} from "@/lib/platforms/oauth/meta";
 import { finalizeOauthSchema, metaPageSchema } from "@/lib/validations/account";
 
 interface PageListCookie {
@@ -12,18 +17,6 @@ interface PageListCookie {
   platform: "FACEBOOK" | "INSTAGRAM";
   userTokenForRefresh: string;
   pages: Array<z.infer<typeof metaPageSchema>>;
-}
-
-function readPageListCookie(request: Request): PageListCookie | null {
-  const match = request.headers
-    .get("cookie")
-    ?.match(new RegExp(`${metaOauthCookies.pageList}=([^;]+)`));
-  if (!match) return null;
-  try {
-    return JSON.parse(decodeURIComponent(match[1])) as PageListCookie;
-  } catch {
-    return null;
-  }
 }
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -46,25 +39,41 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const cookie = readPageListCookie(request);
-  if (!cookie || cookie.metaUserId !== authentication.userId) {
+  const cookieStore = await cookies();
+  const raw = cookieStore.get(metaOauthCookies.pageList)?.value;
+  if (!raw) {
     return NextResponse.json(
       { error: "Your connect session expired. Please try again." },
       { status: 410 },
     );
   }
 
-  const page = cookie.pages.find((item) => item.id === input.data.pageId);
-  if (!page) {
-    return NextResponse.json({ error: "Selected page is no longer available." }, { status: 400 });
+  let cookie: PageListCookie;
+  try {
+    cookie = JSON.parse(raw) as PageListCookie;
+  } catch {
+    return NextResponse.json(
+      { error: "Your connect session expired. Please try again." },
+      { status: 410 },
+    );
   }
 
-  // Compute the handle + externalAccountId appropriate for the platform chosen
-  // at OAuth start. FB connect → Page name + Page id; IG connect → IG
-  // @username + IG business account id (requires the Page to have an IG
-  // business account linked, otherwise the connect is rejected).
+  if (cookie.metaUserId !== authentication.userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const page = cookie.pages.find((item) => item.id === input.data.pageId);
+  if (!page) {
+    return NextResponse.json(
+      { error: "Selected page is no longer available." },
+      { status: 400 },
+    );
+  }
+
+  // FB connect → Page name + Page id; IG connect → @username + IG business
+  // account id (requires the Page to have an IG business account linked).
   let handle: string;
-  let externalAccountId: string;
+  let platformUserId: string;
   if (cookie.platform === "INSTAGRAM") {
     if (!page.instagramBusinessAccountId) {
       return NextResponse.json(
@@ -84,7 +93,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         page.access_token,
       );
       handle = `@${ig.username}`;
-      externalAccountId = ig.id;
+      platformUserId = ig.id;
     } catch {
       return NextResponse.json(
         { error: "Unable to resolve Instagram account details. Please retry." },
@@ -93,63 +102,89 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   } else {
     handle = page.name;
-    externalAccountId = page.id;
+    platformUserId = page.id;
   }
 
-  // Encrypt the tokens before persisting. accessToken holds the Page access
-  // token (the one FB publishPost calls use); refreshTokenEncrypted holds the
-  // long-lived user token, refreshed weekly by /api/cron/refresh-tokens.
+  // Encrypt tokens before persisting. accessToken holds the Page access token
+  // (what FB publishPost calls use); refreshToken holds the long-lived user
+  // token (refreshed opportunistically + by the refresh-tokens cron).
   let accessTokenEncrypted: string;
   let refreshTokenEncrypted: string;
   try {
     accessTokenEncrypted = encryptToken(page.access_token);
     refreshTokenEncrypted = encryptToken(cookie.userTokenForRefresh);
   } catch (error) {
-    if (error instanceof EncryptionConfigError) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: "Unable to encrypt tokens." }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unable to encrypt tokens." },
+      { status: 500 },
+    );
   }
 
-  const tokenExpiresAt = new Date(Date.now() + 60 * DAY_SECONDS * 1000);
+  const tokenExpiresAt = new Date(
+    Date.now() + 60 * DAY_SECONDS * 1000,
+  );
+
+  const scopes = [
+    "pages_show_list",
+    "pages_manage_posts",
+    "pages_read_engagement",
+    "pages_manage_engagement",
+    "instagram_basic",
+    "instagram_content_publish",
+    "business_management",
+  ].join(" ");
 
   try {
-    const account = await db.socialAccount.upsert({
+    // upsert by the (userId, platform, platformUserId) unique constraint that
+    // main's migration `add_social_account_token_fields` does NOT include.
+    // We fall back to the existing unique (userId, platform, handle) and
+    // create if not found.
+    const existing = await db.socialAccount.findFirst({
       where: {
-        userId_platform_externalAccountId: {
-          userId: authentication.userId,
-          platform: cookie.platform,
-          externalAccountId,
-        },
-      },
-      // If the user is reconnecting an existing account (which has
-      // externalAccountId from before), update its tokens and flip status back
-      // to ACTIVE. Otherwise create a fresh row.
-      update: {
-        handle,
-        accessToken: accessTokenEncrypted,
-        refreshTokenEncrypted,
-        tokenExpiresAt,
-        status: "ACTIVE",
-      },
-      create: {
         userId: authentication.userId,
         platform: cookie.platform,
-        handle,
-        accessToken: accessTokenEncrypted,
-        refreshTokenEncrypted,
-        tokenExpiresAt,
-        externalAccountId,
-        status: "ACTIVE",
+        platformUserId,
       },
     });
 
+    const account = existing
+      ? await db.socialAccount.update({
+          where: { id: existing.id },
+          data: {
+            handle,
+            accessToken: accessTokenEncrypted,
+            refreshToken: refreshTokenEncrypted,
+            expiresAt: tokenExpiresAt,
+            scope: scopes,
+            platformUserId,
+            status: "ACTIVE",
+          },
+        })
+      : await db.socialAccount.create({
+          data: {
+            userId: authentication.userId,
+            platform: cookie.platform,
+            handle,
+            accessToken: accessTokenEncrypted,
+            refreshToken: refreshTokenEncrypted,
+            expiresAt: tokenExpiresAt,
+            scope: scopes,
+            platformUserId,
+            status: "ACTIVE",
+          },
+        });
+
     const response = NextResponse.json(
-      { ok: true, accountId: account.id, platform: account.platform, handle: account.handle },
+      {
+        ok: true,
+        accountId: account.id,
+        platform: account.platform,
+        handle: account.handle,
+      },
       { status: 201 },
     );
     // Consume the page-list cookie so finalize can't be replayed.
-    response.cookies.set(metaOauthCookies.pageList, "", {
+    cookieStore.set(metaOauthCookies.pageList, "", {
       httpOnly: true,
       sameSite: "lax",
       path: "/",

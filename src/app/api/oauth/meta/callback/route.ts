@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   decodeState,
@@ -10,7 +11,10 @@ import {
 } from "@/lib/platforms/oauth/meta";
 
 function denyRoute(reason: string): NextResponse {
-  const url = new URL("/settings/accounts", process.env.AUTH_URL ?? "http://localhost:3000");
+  const url = new URL(
+    "/settings/accounts",
+    process.env.AUTH_URL ?? "http://localhost:3000",
+  );
   url.searchParams.set("oauth_error", reason);
   return NextResponse.redirect(url, 302);
 }
@@ -28,9 +32,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     return denyRoute("missing_code");
   }
 
-  const stateCookie = request.headers
-    .get("cookie")
-    ?.match(new RegExp(`${metaOauthCookies.state}=([^;]+)`))?.[1];
+  const cookieStore = await cookies();
+  const stateCookie = cookieStore.get(metaOauthCookies.state)?.value;
   if (!stateCookie) {
     return denyRoute("missing_state");
   }
@@ -45,17 +48,22 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   // Exchange the short-lived code for a short-lived token, then upgrade to a
-  // long-lived (60-day) user token. We keep the long-lived user token only to
-  // refresh Page tokens later — what we actually publish with is the Page
-  // access_token returned from /me/accounts.
+  // long-lived (60-day) user token.
   let longLivedUserToken: string;
   try {
-    const shortLived = await exchangeCodeForToken(config, code, state.pkceVerifier);
+    const shortLived = await exchangeCodeForToken(
+      config,
+      code,
+      state.pkceVerifier,
+    );
     if (shortLived.expiresInSeconds === null) {
-      // Graph already returned a long-lived token (test apps sometimes do).
+      // Graph already returned a long-lived token.
       longLivedUserToken = shortLived.accessToken;
     } else {
-      const longLived = await getLongLivedUserToken(config, shortLived.accessToken);
+      const longLived = await getLongLivedUserToken(
+        config,
+        shortLived.accessToken,
+      );
       longLivedUserToken = longLived.accessToken;
     }
   } catch {
@@ -73,9 +81,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     return denyRoute("no_pages");
   }
 
-  // Stash everything we need to finalize in a short-lived cookie. We don't
-  // store the long-lived user token in the cookie — only the per-Page tokens
-  // (each scoped to one Page) and Page metadata. The user picks a Page next.
+  // Stash everything we need to finalize in a short-lived cookie. We keep only
+  // the per-Page tokens + Page metadata. The user picks a Page next.
   const cookiePayload = {
     metaUserId: state.userId,
     platform: state.platform,
@@ -89,20 +96,21 @@ export async function GET(request: Request): Promise<NextResponse> {
     })),
   };
 
-  const response = NextResponse.redirect(
-    new URL("/settings/accounts/pick-page", process.env.AUTH_URL ?? "http://localhost:3000"),
-    302,
+  const redirectUrl = new URL(
+    "/settings/accounts/pick-page",
+    process.env.AUTH_URL ?? "http://localhost:3000",
   );
-  response.cookies.set(metaOauthCookies.pageList, JSON.stringify(cookiePayload), {
+
+  const response = NextResponse.redirect(redirectUrl, 302);
+  cookieStore.set(metaOauthCookies.pageList, JSON.stringify(cookiePayload), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: metaOauthCookies.ttlSeconds,
   });
-
   // Consume the state cookie so it can't be replayed.
-  response.cookies.set(metaOauthCookies.state, "", {
+  cookieStore.set(metaOauthCookies.state, "", {
     httpOnly: true,
     sameSite: "lax",
     path: "/",

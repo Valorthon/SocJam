@@ -17,3 +17,28 @@ export function isTikTokRealEnabled(): boolean {
     process.env.TIKTOK_CLIENT_KEY && process.env.TIKTOK_CLIENT_SECRET,
   );
 }
+
+function metaAdapterFlag(platform: "FACEBOOK" | "INSTAGRAM"): string | undefined {
+  return (
+    process.env[`${platform}_ADAPTER`] ??
+    process.env[`NEXT_PUBLIC_${platform}_ADAPTER`]
+  );
+}
+
+function isMetaConfigured(): boolean {
+  return Boolean(process.env.META_APP_ID && process.env.META_APP_SECRET);
+}
+
+export function isFacebookRealEnabled(): boolean {
+  const adapter = metaAdapterFlag("FACEBOOK");
+  if (adapter === "real") return true;
+  if (adapter === "mock") return false;
+  return isMetaConfigured();
+}
+
+export function isInstagramRealEnabled(): boolean {
+  const adapter = metaAdapterFlag("INSTAGRAM");
+  if (adapter === "real") return true;
+  if (adapter === "mock") return false;
+  return isMetaConfigured();
+}

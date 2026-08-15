@@ -22,10 +22,6 @@ const account: SocialAccount = {
   scope: null,
   platformUserId: null,
   status: "ACTIVE",
-  externalAccountId: null,
-  refreshTokenEncrypted: null,
-  tokenExpiresAt: null,
-  metaUserId: null,
 };
 
 function postFixture(

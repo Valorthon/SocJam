@@ -1,30 +1,28 @@
 import assert from "node:assert/strict";
-import {
-  __resetRealAdapterCacheForTests,
-  connectModeFor,
-  getPlatformAdapter,
-  isRealPlatform,
-} from "../src/lib/platforms/registry";
+import { getPlatformAdapter } from "../src/lib/platforms/registry";
+import { isFacebookRealEnabled, isInstagramRealEnabled } from "../src/lib/platforms/config";
 
 async function run(): Promise<void> {
-  const originalFb = process.env.REAL_FACEBOOK;
-  const originalIg = process.env.REAL_INSTAGRAM;
+  const originalFb = process.env.FACEBOOK_ADAPTER;
+  const originalIg = process.env.INSTAGRAM_ADAPTER;
+  const originalMetaId = process.env.META_APP_ID;
+  const originalMetaSecret = process.env.META_APP_SECRET;
+  const originalMockPlatforms = process.env.MOCK_PLATFORMS;
 
   try {
     // Default state (no real flags): every platform uses a mock adapter.
-    delete process.env.REAL_FACEBOOK;
-    delete process.env.REAL_INSTAGRAM;
+    delete process.env.FACEBOOK_ADAPTER;
+    delete process.env.INSTAGRAM_ADAPTER;
+    delete process.env.META_APP_ID;
+    delete process.env.META_APP_SECRET;
+    process.env.MOCK_PLATFORMS = "true";
 
-    assert.equal(isRealPlatform("FACEBOOK"), false);
-    assert.equal(isRealPlatform("INSTAGRAM"), false);
-    assert.equal(isRealPlatform("X"), false);
-    assert.equal(connectModeFor("FACEBOOK"), "mock");
-    assert.equal(connectModeFor("INSTAGRAM"), "mock");
+    assert.equal(isFacebookRealEnabled(), false);
+    assert.equal(isInstagramRealEnabled(), false);
 
     // Mock adapter contract still intact.
     const mockFb = getPlatformAdapter("FACEBOOK");
     assert.equal(mockFb.platform, "FACEBOOK");
-    // Mock adapter publishes a mock-url:
     const result = await mockFb.publishPost({
       targetId: "registry-target-1",
       idempotencyKey: "123e4567-e89b-12d3-a456-426614174000",
@@ -36,11 +34,11 @@ async function run(): Promise<void> {
         platform: "FACEBOOK",
         handle: "@mock",
         accessToken: "mock-token",
+        refreshToken: null,
+        expiresAt: null,
+        scope: null,
+        platformUserId: null,
         status: "ACTIVE",
-        externalAccountId: null,
-        refreshTokenEncrypted: null,
-        tokenExpiresAt: null,
-        metaUserId: null,
       },
     });
     assert.equal(result.ok, true);
@@ -48,34 +46,35 @@ async function run(): Promise<void> {
       assert.ok(result.publishedUrl.startsWith("https://mock.facebook.local/post/"));
     }
 
-    // Flipping REAL_FACEBOOK=true routes FB to a real adapter.
-    process.env.REAL_FACEBOOK = "true";
-    __resetRealAdapterCacheForTests();
+    // Flipping FACEBOOK_ADAPTER=real routes FB to a real adapter.
+    process.env.FACEBOOK_ADAPTER = "real";
     const realFb = getPlatformAdapter("FACEBOOK");
     assert.equal(realFb.platform, "FACEBOOK");
     assert.notEqual(realFb, mockFb, "real adapter must not be the mock instance");
-
-    // connectModeFor reflects the flag.
-    assert.equal(connectModeFor("FACEBOOK"), "real");
-    assert.equal(isRealPlatform("FACEBOOK"), true);
+    assert.equal(isFacebookRealEnabled(), true);
 
     // Other platforms stay mock.
-    assert.equal(connectModeFor("X"), "mock");
-    assert.equal(connectModeFor("LINKEDIN"), "mock");
-    assert.equal(isRealPlatform("TIKTOK"), false);
+    delete process.env.FACEBOOK_ADAPTER;
+    process.env.MOCK_PLATFORMS = "true";
+    assert.equal(isFacebookRealEnabled(), false);
 
-    // IG special-case: IG advertise-real requires REAL_FACEBOOK too (since
-    // IG publish path stays mock in this phase even when real OAuth is on).
-    process.env.REAL_INSTAGRAM = "true";
-    delete process.env.REAL_FACEBOOK;
-    // IG alone → still reported as mock (FB flag missing).
-    assert.equal(isRealPlatform("INSTAGRAM"), false);
-    assert.equal(connectModeFor("INSTAGRAM"), "mock");
-    // IG adapter still returns the mock even when both flags are on.
-    process.env.REAL_FACEBOOK = "true";
-    assert.equal(isRealPlatform("INSTAGRAM"), true);
-    assert.equal(connectModeFor("INSTAGRAM"), "real");
-    // And getPlatformAdapter still returns the mock for IG publish.
+    // Auto-detect: META_APP_ID + META_APP_SECRET set → real.
+    process.env.META_APP_ID = "123456789";
+    process.env.META_APP_SECRET = "secret";
+    assert.equal(isFacebookRealEnabled(), true);
+    assert.equal(isInstagramRealEnabled(), true);
+
+    // Explicit "mock" overrides auto-detect.
+    process.env.FACEBOOK_ADAPTER = "mock";
+    assert.equal(isFacebookRealEnabled(), false);
+    delete process.env.FACEBOOK_ADAPTER;
+    assert.equal(isFacebookRealEnabled(), true);
+
+    // IG special-case: IG connect mode is "real" but getPlatformAdapter for IG
+    // always returns the mock (publish stays mock this phase).
+    process.env.INSTAGRAM_ADAPTER = "real";
+    assert.equal(isInstagramRealEnabled(), true);
+    process.env.MOCK_PLATFORMS = "true";
     const igAdapter = getPlatformAdapter("INSTAGRAM");
     const igResult = await igAdapter.publishPost({
       targetId: "ig-registry-target",
@@ -87,6 +86,7 @@ async function run(): Promise<void> {
           postId: "post-1",
           url: "https://local/img.jpg",
           type: "IMAGE",
+          mimeType: "image/jpeg",
           sizeBytes: 1024,
           width: null,
           height: null,
@@ -99,11 +99,11 @@ async function run(): Promise<void> {
         platform: "INSTAGRAM",
         handle: "@mock",
         accessToken: "mock-token",
+        refreshToken: null,
+        expiresAt: null,
+        scope: null,
+        platformUserId: null,
         status: "ACTIVE",
-        externalAccountId: null,
-        refreshTokenEncrypted: null,
-        tokenExpiresAt: null,
-        metaUserId: null,
       },
     });
     assert.equal(igResult.ok, true);
@@ -114,14 +114,29 @@ async function run(): Promise<void> {
     console.log("Registry tests passed.");
   } finally {
     if (originalFb === undefined) {
-      delete process.env.REAL_FACEBOOK;
+      delete process.env.FACEBOOK_ADAPTER;
     } else {
-      process.env.REAL_FACEBOOK = originalFb;
+      process.env.FACEBOOK_ADAPTER = originalFb;
     }
     if (originalIg === undefined) {
-      delete process.env.REAL_INSTAGRAM;
+      delete process.env.INSTAGRAM_ADAPTER;
     } else {
-      process.env.REAL_INSTAGRAM = originalIg;
+      process.env.INSTAGRAM_ADAPTER = originalIg;
+    }
+    if (originalMetaId === undefined) {
+      delete process.env.META_APP_ID;
+    } else {
+      process.env.META_APP_ID = originalMetaId;
+    }
+    if (originalMetaSecret === undefined) {
+      delete process.env.META_APP_SECRET;
+    } else {
+      process.env.META_APP_SECRET = originalMetaSecret;
+    }
+    if (originalMockPlatforms === undefined) {
+      delete process.env.MOCK_PLATFORMS;
+    } else {
+      process.env.MOCK_PLATFORMS = originalMockPlatforms;
     }
   }
 }

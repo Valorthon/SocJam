@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import type { SocialAccount } from "@prisma/client";
-import { encryptToken } from "../src/lib/crypto";
+import { encryptToken } from "../src/lib/tokens/crypto";
 import {
   AnalyticsNotImplementedError,
   RealFacebookAdapter,
 } from "../src/lib/platforms/adapters/realFacebook";
 import type { PublishInput } from "../src/lib/platforms/types";
+
+process.env.TOKEN_ENCRYPTION_KEY =
+  process.env.TOKEN_ENCRYPTION_KEY ??
+  "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
 
 const PLAINTEXT_TOKEN = "EAABpage_token_abc123";
 const PAGE_ID = "987654321";
@@ -17,11 +21,11 @@ function setActiveAccount(): SocialAccount {
     platform: "FACEBOOK",
     handle: "Acme Page",
     accessToken: encryptToken(PLAINTEXT_TOKEN),
+    refreshToken: null,
+    expiresAt: null,
+    scope: null,
+    platformUserId: PAGE_ID,
     status: "ACTIVE",
-    externalAccountId: PAGE_ID,
-    refreshTokenEncrypted: null,
-    tokenExpiresAt: null,
-    metaUserId: null,
   };
 }
 
@@ -56,25 +60,12 @@ function input(overrides: Partial<PublishInput> = {}): PublishInput {
 }
 
 async function run(): Promise<void> {
-  // APP_ENCRYPTION_KEY must be set so encryptToken/decryptToken are usable.
-  if (!process.env.APP_ENCRYPTION_KEY) {
-    process.env.APP_ENCRYPTION_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-  }
-
-  // Meta OAuth env must be set so RealFacebookAdapter's lazy config load works.
+  // Meta OAuth env must be set so RealFacebookAdapter's config load works.
   process.env.META_APP_ID = "test-app-id";
   process.env.META_APP_SECRET = "test-app-secret";
   process.env.META_REDIRECT_URI = "http://localhost:3000/api/oauth/meta/callback";
   process.env.META_GRAPH_API_VERSION = "v19.0";
   process.env.AUTH_SECRET = "test-auth-secret";
-
-  // Graph version env var is used at runtime
-  process.env.META_GRAPH_API_VERSION = "v19.0";
-
-  // --- Validation failure (text over FB limit impossible in chars, use empty
-  // --- but constraints don't block empty for FB; we skip and check media rule).
-  // Instead, verify validation against an obviously too-long string is fine,
-  // and move to the publish path which is more interesting.
 
   // --- Successful publish ---
   let capturedUrl: URL | null = null;
@@ -83,7 +74,6 @@ async function run(): Promise<void> {
     const u = new URL(String(inputUrl));
     capturedUrl = u;
     capturedInit = init ?? null;
-    // Real Graph /feed returns "{pageId}_{postId}".
     return jsonResponse(200, { id: `${PAGE_ID}_post_999` });
   });
   const adapter = new RealFacebookAdapter();
@@ -109,7 +99,8 @@ async function run(): Promise<void> {
       error: { message: "Session has expired", type: "OAuthException", code: 190 },
     });
   });
-  const expired = await adapter.publishPost(input());
+  const adapter401 = new RealFacebookAdapter();
+  const expired = await adapter401.publishPost(input());
   assert.equal(expired.ok, false);
   if (!expired.ok) {
     assert.equal(expired.authExpired, true, "authExpired flag should be set on 190 error");
@@ -118,12 +109,14 @@ async function run(): Promise<void> {
   }
   restore401();
 
-  // --- checkAuth active ---
+  // --- checkAuth active (returns { active, account }) ---
   const restoreAuthOk = installFetch(async () =>
     jsonResponse(200, { name: "Acme Page" }),
   );
-  const activeCheck = await adapter.checkAuth(setActiveAccount());
-  assert.deepEqual(activeCheck, { active: true });
+  const adapterAuthOk = new RealFacebookAdapter();
+  const activeCheck = await adapterAuthOk.checkAuth(setActiveAccount());
+  assert.equal(activeCheck.active, true);
+  assert.ok(activeCheck.account, "refreshed account should be returned");
   restoreAuthOk();
 
   // --- checkAuth expired returns active=false ---
@@ -132,15 +125,17 @@ async function run(): Promise<void> {
       error: { message: "bad token", code: 190 },
     }),
   );
-  const expiredCheck = await adapter.checkAuth(setActiveAccount());
-  assert.deepEqual(expiredCheck, { active: false });
+  const adapterAuthExpired = new RealFacebookAdapter();
+  const expiredCheck = await adapterAuthExpired.checkAuth(setActiveAccount());
+  assert.equal(expiredCheck.active, false);
   restoreAuthExpired();
 
   // --- Rate limit (429) → retryable, not authExpired ---
   const restore429 = installFetch(async () =>
     jsonResponse(429, { error: { message: "rate limited", code: 4 } }),
   );
-  const rateLimited = await adapter.publishPost(input());
+  const adapter429 = new RealFacebookAdapter();
+  const rateLimited = await adapter429.publishPost(input());
   assert.equal(rateLimited.ok, false);
   if (!rateLimited.ok) {
     assert.equal(rateLimited.authExpired, false);
@@ -154,7 +149,8 @@ async function run(): Promise<void> {
       error: { message: "raw-internal-stack-detail-that-must-not-leak" },
     }),
   );
-  const leaking = await adapter.publishPost(input());
+  const adapterLeak = new RealFacebookAdapter();
+  const leaking = await adapterLeak.publishPost(input());
   assert.equal(leaking.ok, false);
   if (!leaking.ok) {
     assert.ok(!leaking.error.includes("raw-internal-stack-detail"));
@@ -166,7 +162,8 @@ async function run(): Promise<void> {
   const restoreNet = installFetch(async () => {
     throw new Error("fetch failed");
   });
-  const netFail = await adapter.publishPost(input());
+  const adapterNet = new RealFacebookAdapter();
+  const netFail = await adapterNet.publishPost(input());
   assert.equal(netFail.ok, false);
   if (!netFail.ok) {
     assert.equal(netFail.retryable, true);
@@ -192,9 +189,6 @@ async function run(): Promise<void> {
   } catch (error) {
     assert.ok(error instanceof AnalyticsNotImplementedError);
   }
-
-  // --- Validation failure surfaces (no media required for FB, so test with
-  // --- a path that's clearly invalid: text length is fine for FB, so skip).
 
   console.log("RealFacebook adapter tests passed.");
 }

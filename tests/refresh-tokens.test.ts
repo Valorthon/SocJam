@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { type Platform } from "@prisma/client";
-import { EncryptionConfigError } from "../src/lib/crypto";
 import {
   createRefreshTokensRunner,
   isCronRefreshAuthorized,
@@ -20,13 +19,13 @@ const fakeConfig = {
 interface TestAccount {
   id: string;
   platform: Platform;
-  refreshTokenEncrypted: string;
-  tokenExpiresAt: Date;
+  refreshToken: string;
+  expiresAt: Date;
 }
 
 function makeDeps(overrides: Partial<RefreshTokensDependencies>): RefreshTokensDependencies {
   return {
-    findAccounts: async () => [],
+    findAccounts: async () => [] as TestAccount[],
     updateStatus: async () => {},
     updateRefreshedToken: async () => {},
     loadMetaConfig: () => fakeConfig,
@@ -50,14 +49,12 @@ async function run(): Promise<void> {
       false,
     );
 
-    // Empty / whitespace secret is treated as off.
     process.env.CRON_SECRET = "  ";
     assert.equal(
       isCronRefreshAuthorized(new Request("http://localhost", { headers: { "x-cron-secret": "anything" } })),
       false,
     );
 
-    // Correct secret + correct header authorizes.
     process.env.CRON_SECRET = "my-cron-secret";
     assert.equal(
       isCronRefreshAuthorized(new Request("http://localhost", { headers: { "x-cron-secret": "my-cron-secret" } })),
@@ -90,8 +87,8 @@ async function run(): Promise<void> {
           {
             id: "acc-a",
             platform: "FACEBOOK",
-            refreshTokenEncrypted: "user-a",
-            tokenExpiresAt: new Date(Date.now() + 1),
+            refreshToken: "user-a",
+            expiresAt: new Date(Date.now() + 1),
           },
         ],
         updateRefreshedToken: async (id, enc, exp) => {
@@ -120,14 +117,14 @@ async function run(): Promise<void> {
           {
             id: "acc-dec",
             platform: "FACEBOOK",
-            refreshTokenEncrypted: "x",
-            tokenExpiresAt: new Date(),
+            refreshToken: "x",
+            expiresAt: new Date(),
           },
           {
             id: "acc-ok",
             platform: "FACEBOOK",
-            refreshTokenEncrypted: "y",
-            tokenExpiresAt: new Date(),
+            refreshToken: "y",
+            expiresAt: new Date(),
           },
         ],
         updateStatus: async (id) => {
@@ -136,7 +133,7 @@ async function run(): Promise<void> {
         updateRefreshedToken: async () => {},
         decryptToken: () => {
           decrypted += 1;
-          if (decrypted === 1) throw new EncryptionConfigError("decrypt failed");
+          if (decrypted === 1) throw new Error("decrypt failed (tampering)");
           return "ok";
         },
         refreshUserToken: async () => ({ accessToken: "fresh", expiresInSeconds: 100 }),
@@ -154,8 +151,8 @@ async function run(): Promise<void> {
           {
             id: "acc-fail",
             platform: "FACEBOOK",
-            refreshTokenEncrypted: "x",
-            tokenExpiresAt: new Date(),
+            refreshToken: "x",
+            expiresAt: new Date(),
           },
         ],
         updateStatus: async () => { statusFails += 1; },
@@ -177,8 +174,8 @@ async function run(): Promise<void> {
             {
               id: "anything",
               platform: "FACEBOOK",
-              refreshTokenEncrypted: "x",
-              tokenExpiresAt: new Date(),
+              refreshToken: "x",
+              expiresAt: new Date(),
             },
           ],
           loadMetaConfig: () => {

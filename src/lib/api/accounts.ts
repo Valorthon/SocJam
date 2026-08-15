@@ -5,13 +5,10 @@ import { requestJson, requestNoContent } from "@/lib/api/client";
 import {
   accountIdParamsSchema,
   connectAccountSchema,
-  connectModeResponseSchema,
   finalizeOauthSchema,
   metaPageListResponseSchema,
   type ConnectAccountInput,
-  type ConnectModeResponse,
   type MetaPage,
-  type MetaPageListResponse,
 } from "@/lib/validations/account";
 import {
   accountListResponseSchema,
@@ -21,7 +18,6 @@ import {
 
 export const accountQueryKeys = {
   all: ["accounts"] as const,
-  connectMode: ["accounts", "connect-mode"] as const,
   metaPages: ["accounts", "meta", "pages"] as const,
 };
 
@@ -65,14 +61,6 @@ async function disconnectAccount(accountId: string): Promise<void> {
   await requestNoContent(`/api/accounts/${parsed.data.id}`, {
     method: "DELETE",
   });
-}
-
-async function fetchConnectMode(): Promise<ConnectModeResponse> {
-  return requestJson(
-    "/api/accounts/connect-mode",
-    { method: "GET" },
-    connectModeResponseSchema,
-  );
 }
 
 async function fetchMetaPages(): Promise<MetaPage[]> {
@@ -127,14 +115,6 @@ export function useDisconnectAccount() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: accountQueryKeys.all });
     },
-  });
-}
-
-export function useConnectMode() {
-  return useQuery({
-    queryKey: accountQueryKeys.connectMode,
-    queryFn: fetchConnectMode,
-    staleTime: 5 * 60 * 1000,
   });
 }
 

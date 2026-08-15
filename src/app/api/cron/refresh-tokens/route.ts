@@ -4,7 +4,7 @@ import {
   type Platform,
 } from "@prisma/client";
 import { db } from "@/lib/db";
-import { decryptToken, encryptToken, EncryptionConfigError } from "@/lib/crypto";
+import { decryptToken, encryptToken } from "@/lib/tokens/crypto";
 import {
   loadMetaConfig,
   refreshUserToken,
@@ -13,15 +13,16 @@ import {
 
 /**
  * Refreshes Meta long-lived user tokens before they expire (~60-day window).
- * Page access tokens created from a long-lived user token don't expire while
- * the user token is valid, so refreshing the user token keeps the Page token
- * live and the account healthy. If refresh fails, we flag the account
- * RECONNECT_REQUIRED — the user sees the reconnect CTA per SPEC §5.3.
+ * This is the defense-in-depth companion to the opportunistic refresh in
+ * RealFacebookAdapter.ensureFreshToken — it catches accounts whose tokens
+ * would tick down to expiry with no in-flow trigger (e.g. a draft never
+ * published again). If refresh fails, the account is flagged
+ * RECONNECT_REQUIRED per SPEC §5.3.
  *
- * Secured by the CRON_SECRET header, the same guard used by /publish-due.
+ * Secured by the CRON_SECRET header — the same guard used by /publish-due.
  */
 
-const REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days before expiry.
+const REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_SECONDS = 24 * 60 * 60;
 
 export function isCronRefreshAuthorized(request: Request): boolean {
@@ -42,15 +43,15 @@ export interface RefreshTokensDependencies {
     Array<{
       id: string;
       platform: Platform;
-      refreshTokenEncrypted: string;
-      tokenExpiresAt: Date;
+      refreshToken: string;
+      expiresAt: Date;
     }>
   >;
   updateStatus: (accountId: string, status: AccountStatus) => Promise<void>;
   updateRefreshedToken: (
     accountId: string,
-    refreshTokenEncrypted: string,
-    tokenExpiresAt: Date,
+    refreshToken: string,
+    expiresAt: Date,
   ) => Promise<void>;
   loadMetaConfig: () => MetaConfig;
   decryptToken: (encoded: string) => string;
@@ -81,18 +82,17 @@ export function createRefreshTokensRunner(dependencies: RefreshTokensDependencie
     const nowFn = dependencies.now ?? (() => new Date());
 
     for (const account of accounts) {
-      if (!account.refreshTokenEncrypted) continue;
+      if (!account.refreshToken) continue;
 
       let userToken: string;
       try {
-        userToken = dependencies.decryptToken(account.refreshTokenEncrypted);
-      } catch (error) {
-        if (error instanceof EncryptionConfigError) {
-          await dependencies.updateStatus(account.id, "RECONNECT_REQUIRED");
-          markedReconnect += 1;
-          continue;
-        }
-        throw error;
+        userToken = dependencies.decryptToken(account.refreshToken);
+      } catch {
+        // Decrypt failure (tampering, key mismatch, corrupt token) — treat
+        // as auth-expired so the user sees the reconnect CTA (SPEC §5.3).
+        await dependencies.updateStatus(account.id, "RECONNECT_REQUIRED");
+        markedReconnect += 1;
+        continue;
       }
 
       try {
@@ -106,7 +106,6 @@ export function createRefreshTokensRunner(dependencies: RefreshTokensDependencie
         );
         refreshed += 1;
       } catch {
-        // Graph refresh failed. Mark RECONNECT_REQUIRED so the user re-runs OAuth.
         await dependencies.updateStatus(account.id, "RECONNECT_REQUIRED");
         markedReconnect += 1;
       }
@@ -120,31 +119,31 @@ const productionRunner = createRefreshTokensRunner({
   findAccounts: async () =>
     db.socialAccount.findMany({
       where: {
-        refreshTokenEncrypted: { not: null },
-        tokenExpiresAt: { lte: new Date(Date.now() + REFRESH_WINDOW_MS) },
+        refreshToken: { not: null },
+        expiresAt: { lte: new Date(Date.now() + REFRESH_WINDOW_MS) },
         status: "ACTIVE",
       },
       select: {
         id: true,
         platform: true,
-        refreshTokenEncrypted: true,
-        tokenExpiresAt: true,
+        refreshToken: true,
+        expiresAt: true,
       },
     }) as unknown as Array<{
       id: string;
       platform: Platform;
-      refreshTokenEncrypted: string;
-      tokenExpiresAt: Date;
+      refreshToken: string;
+      expiresAt: Date;
     }>,
   updateStatus: async (accountId, status) => {
     await db.socialAccount.update({ where: { id: accountId }, data: { status } });
   },
-  updateRefreshedToken: async (accountId, refreshTokenEncrypted, tokenExpiresAt) => {
+  updateRefreshedToken: async (accountId, refreshToken, expiresAt) => {
     await db.socialAccount.update({
       where: { id: accountId },
       data: {
-        refreshTokenEncrypted,
-        tokenExpiresAt,
+        refreshToken,
+        expiresAt,
         status: "ACTIVE",
       },
     });

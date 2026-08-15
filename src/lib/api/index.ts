@@ -1,7 +1,6 @@
 export {
   useAccounts,
   useConnectAccount,
-  useConnectMode,
   useDisconnectAccount,
   useFinalizeMetaConnection,
   useMetaPages,

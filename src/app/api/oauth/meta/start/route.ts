@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -20,10 +21,10 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // IG connect reuses the same FB/IG OAuth handshake: Facebook Login with
-  // Instagram scopes. We allow both platforms through the same start route.
   const url = new URL(request.url);
-  const input = startSchema.safeParse({ platform: url.searchParams.get("platform") });
+  const input = startSchema.safeParse({
+    platform: url.searchParams.get("platform"),
+  });
   if (!input.success) {
     return NextResponse.json({ error: "Invalid platform." }, { status: 400 });
   }
@@ -49,7 +50,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   const authUrl = buildAuthUrl(config, state, pkceVerifier);
 
   const response = NextResponse.redirect(authUrl, 302);
-  response.cookies.set(metaOauthCookies.state, state, {
+  const cookieStore = await cookies();
+  cookieStore.set(metaOauthCookies.state, state, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
