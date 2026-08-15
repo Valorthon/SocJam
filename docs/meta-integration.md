@@ -139,7 +139,7 @@ You do **not** need a real Meta app, a Facebook account, or any of the `META_*` 
 pnpm test
 ```
 
-This runs all 24 suites. The 4 added by this phase are:
+This runs all 25 suites. The 5 added by this phase are:
 
 | Suite | What it asserts |
 |---|---|
@@ -147,6 +147,7 @@ This runs all 24 suites. The 4 added by this phase are:
 | `tests/registry.test.ts` | `FACEBOOK_ADAPTER=real` routes to `RealFacebookAdapter`; `"mock"` and unset both fall back to mock; auto-detect from `META_APP_ID`+`META_APP_SECRET`; IG special-case: `INSTAGRAM_ADAPTER=real` enables real connect but `getPlatformAdapter("INSTAGRAM")` still returns the mock publish adapter. |
 | `tests/real-facebook-adapter.test.ts` | Successful publish → correct permalink; 401 / Graph code 190 → `authExpired: true`; 429 → retryable; raw Meta error body **never** leaks; network failure → retryable (no exception); `checkAuth` returns `{ active, account }`; `fetchAnalytics` throws `AnalyticsNotImplementedError`. Stubs `globalThis.fetch` — no real Graph calls. |
 | `tests/refresh-tokens.test.ts` | `CRON_SECRET` guard (missing/empty/wrong/all correct); happy refresh path; decrypt failure → `RECONNECT_REQUIRED`; Graph refresh failure → `RECONNECT_REQUIRED`; missing Meta config → 500-style error. Uses DI-friendly `createRefreshTokensRunner`. |
+| `tests/connect-mode.test.ts` | Unauthenticated → 401; all-mock baseline; per-platform real; multi-real; exact 5-platform keyset; response schema validation. Uses DI-friendly `createConnectModeRouteHandlers`. |
 
 Plus the existing 20 suites still pass (including LinkedIn and Google OAuth suites from `main`). Main's `token-crypto.test.ts` covers the shared `src/lib/tokens/crypto.ts` module.
 
@@ -247,6 +248,7 @@ Until then, Instagram's `publishPost` keeps returning the mock URL `https://mock
 ## Architectural notes
 
 - **Per-platform dispatch.** `src/lib/platforms/registry.ts` resolves a platform's adapter at call time. For Facebook: `isFacebookRealEnabled()` → `realFacebookAdapter`, else mock. For LinkedIn: `isLinkedInRealEnabled()` → `linkedInAdapter`, else mock. For Instagram: always the mock adapter (real OAuth for connect only). All other platforms stay mock. The global `MOCK_PLATFORMS=true` flag remains the fallback gate for mock adapters.
+- **Connect mode is server-side.** `GET /api/accounts/connect-mode` is the source of truth for which adapter each platform should use in the connect UI. It runs `is*RealEnabled()` on the server (where env vars are loaded) and returns `{ modes: { FACEBOOK: "real", ... } }`. Client components (`accounts page`, `OnboardingAccountList`) fetch this via `useConnectMode()` (TanStack Query) and branch on the response. Direct client-side imports of `is*RealEnabled()` would resolve to `undefined` in the browser because `FACEBOOK_ADAPTER` / `META_APP_ID` / etc. are not `NEXT_PUBLIC_`.
 - **Config detection.** `src/lib/platforms/config.ts` exports `isFacebookRealEnabled()` / `isInstagramRealEnabled()` mirroring `isLinkedInRealEnabled()`. Each reads `<PLATFORM>_ADAPTER` (or `NEXT_PUBLIC_<PLATFORM>_ADAPTER` for client-side); `"real"`/`"mock"` win over auto-detect; unset falls back to auto-detect from `META_APP_ID` + `META_APP_SECRET`.
 - **Token storage.** `SocialAccount.accessToken` holds the **encrypted** Page access token; `refreshToken` holds the encrypted long-lived user token; `expiresAt` is the user-token expiry; `platformUserId` is the Page ID (or IG business-account ID). The whole key envelope is `enc:<iv>:<authTag>:<ciphertext>` (base64url) — see `src/lib/tokens/crypto.ts` (shared with LinkedIn).
 - **CSRF + PKCE.** `state` is HMAC-signed (`AUTH_SECRET` as the key) and round-tripped via an HttpOnly cookie set through `next/headers` `cookies()`; PKCE uses S256. A mismatched state, missing cookie, or replayed finalize payload is rejected — see `src/lib/platforms/oauth/meta.ts`.
