@@ -49,3 +49,13 @@ export const finalizeOauthSchema = z
   .strict();
 
 export type FinalizeOauthInput = z.infer<typeof finalizeOauthSchema>;
+
+export const connectModeResponseSchema = z
+  .object({
+    // Map of platform -> "real" | "mock". Resolved server-side (env vars and
+    // OAuth credentials are not exposed to the browser).
+    modes: z.record(z.enum(PLATFORMS), z.enum(["real", "mock"])),
+  })
+  .strict();
+
+export type ConnectModeResponse = z.infer<typeof connectModeResponseSchema>;

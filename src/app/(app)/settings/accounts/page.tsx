@@ -15,18 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAccounts } from "@/lib/api";
+import { useAccounts, useConnectMode } from "@/lib/api";
 import {
   PLATFORM_ONBOARDING_DETAILS,
   PLATFORMS,
   type Platform,
 } from "@/lib/platforms/constraints";
-import {
-  isFacebookRealEnabled,
-  isInstagramRealEnabled,
-  isLinkedInRealEnabled,
-  isTikTokRealEnabled,
-} from "@/lib/platforms/config";
+import { isTikTokRealEnabled } from "@/lib/platforms/config";
 import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -66,12 +61,14 @@ export default function ConnectedAccountsPage() {
 
 function ConnectedAccountsPageInner() {
   const accountsQuery = useAccounts();
+  const connectModeQuery = useConnectMode();
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
   const [addPlatformOpen, setAddPlatformOpen] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const accounts = accountsQuery.data ?? [];
+  const modes = connectModeQuery.data?.modes;
 
   useEffect(() => {
     const success = searchParams.get("success");
@@ -125,7 +122,7 @@ function ConnectedAccountsPageInner() {
   }, [searchParams, router]);
 
   function startPlatformConnect(platform: Platform) {
-    if (platform === "LINKEDIN" && isLinkedInRealEnabled()) {
+    if (platform === "LINKEDIN" && modes?.[platform] === "real") {
       window.location.href = LINKEDIN_OAUTH_URL;
       return;
     }
@@ -136,8 +133,8 @@ if (platform === "TIKTOK" && isTikTokRealEnabled()) {
     }
 
     if (
-      (platform === "FACEBOOK" && isFacebookRealEnabled()) ||
-      (platform === "INSTAGRAM" && isInstagramRealEnabled())
+      (platform === "FACEBOOK" || platform === "INSTAGRAM") &&
+      modes?.[platform] === "real"
     ) {
       window.location.href = `${META_OAUTH_START_URL}?platform=${platform}`;
       return;
@@ -232,8 +229,9 @@ if (platform === "TIKTOK" && isTikTokRealEnabled()) {
           <DialogHeader>
             <DialogTitle>Add a platform</DialogTitle>
             <DialogDescription>
-              Choose a platform to connect it to SocJam. LinkedIn and TikTok
-              use real OAuth when credentials are configured.
+              Choose a platform to connect it to SocJam. LinkedIn, TikTok,
+              Facebook, and Instagram use real OAuth when credentials are
+              configured.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 sm:grid-cols-2">

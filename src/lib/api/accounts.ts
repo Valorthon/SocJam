@@ -5,9 +5,11 @@ import { requestJson, requestNoContent } from "@/lib/api/client";
 import {
   accountIdParamsSchema,
   connectAccountSchema,
+  connectModeResponseSchema,
   finalizeOauthSchema,
   metaPageListResponseSchema,
   type ConnectAccountInput,
+  type ConnectModeResponse,
   type MetaPage,
 } from "@/lib/validations/account";
 import {
@@ -18,6 +20,7 @@ import {
 
 export const accountQueryKeys = {
   all: ["accounts"] as const,
+  connectMode: ["accounts", "connect-mode"] as const,
   metaPages: ["accounts", "meta", "pages"] as const,
 };
 
@@ -72,6 +75,14 @@ async function fetchMetaPages(): Promise<MetaPage[]> {
   return response.pages;
 }
 
+async function fetchConnectMode(): Promise<ConnectModeResponse> {
+  return requestJson(
+    "/api/accounts/connect-mode",
+    { method: "GET" },
+    connectModeResponseSchema,
+  );
+}
+
 async function finalizeMetaConnection(input: { pageId: string }): Promise<void> {
   const parsed = finalizeOauthSchema.safeParse(input);
   if (!parsed.success) {
@@ -123,6 +134,14 @@ export function useMetaPages() {
     queryKey: accountQueryKeys.metaPages,
     queryFn: fetchMetaPages,
     retry: false,
+  });
+}
+
+export function useConnectMode() {
+  return useQuery({
+    queryKey: accountQueryKeys.connectMode,
+    queryFn: fetchConnectMode,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
