@@ -24,6 +24,7 @@ import { decryptToken, encryptToken } from "@/lib/tokens/crypto";
 
 const LINKEDIN_POSTS_URL = "https://api.linkedin.com/rest/posts";
 const LINKEDIN_REGISTER_UPLOAD_URL = "https://api.linkedin.com/v2/assets?action=registerUpload";
+const LINKEDIN_API_VERSION_DEFAULT = "202607";
 
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
@@ -47,6 +48,7 @@ export interface LinkedInAdapterDependencies {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  apiVersion: string;
   exchangeCodeForToken: typeof exchangeCodeForToken;
   fetchMemberProfile: typeof fetchMemberProfile;
   refreshAccessToken: typeof refreshAccessToken;
@@ -149,6 +151,10 @@ export class LinkedInAdapter implements SocialPlatformAdapter {
         dependencies.redirectUri ??
         process.env.LINKEDIN_REDIRECT_URI ??
         "http://localhost:3000/api/accounts/oauth/linkedin/callback",
+      apiVersion:
+        dependencies.apiVersion ??
+        process.env.LINKEDIN_API_VERSION ??
+        LINKEDIN_API_VERSION_DEFAULT,
       exchangeCodeForToken: dependencies.exchangeCodeForToken ?? exchangeCodeForToken,
       fetchMemberProfile: dependencies.fetchMemberProfile ?? fetchMemberProfile,
       refreshAccessToken: dependencies.refreshAccessToken ?? refreshAccessToken,
@@ -353,6 +359,8 @@ export class LinkedInAdapter implements SocialPlatformAdapter {
         targetEntities: [],
         thirdPartyDistributionChannels: [],
       },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false,
     };
 
     if (imageAssetUrns.length === 1) {
@@ -371,6 +379,7 @@ export class LinkedInAdapter implements SocialPlatformAdapter {
       method: "POST",
       headers: {
         Authorization: `Bearer ${input.accessToken}`,
+        "LinkedIn-Version": this.dependencies.apiVersion,
         "X-Restli-Protocol-Version": "2.0.0",
         "Content-Type": "application/json",
         "Idempotency-Key": input.idempotencyKey,
@@ -392,10 +401,10 @@ export class LinkedInAdapter implements SocialPlatformAdapter {
       throw error;
     }
 
+    const restliId = response.headers.get("x-restli-id");
     const parsed = createPostResponseSchema.parse(data);
-    return parsed.id
-      ? `https://www.linkedin.com/feed/update/${parsed.id}`
-      : "https://www.linkedin.com";
+    const postId = restliId ?? parsed.id;
+    return postId ? `https://www.linkedin.com/feed/update/${postId}` : "https://www.linkedin.com";
   }
 
   private async uploadImage(

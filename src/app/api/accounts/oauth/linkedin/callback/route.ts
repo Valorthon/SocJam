@@ -7,6 +7,7 @@ import { LinkedInAdapter } from "@/lib/platforms/adapters/linkedin";
 import {
   exchangeCodeForToken,
   fetchMemberProfile,
+  sanitizeOAuthEnvValue,
 } from "@/lib/platforms/oauth/linkedin";
 import { encryptToken } from "@/lib/tokens/crypto";
 import { db } from "@/lib/db";
@@ -22,17 +23,13 @@ const callbackParamsSchema = z.object({
 
 interface OAuthCookie {
   state: string;
-  codeVerifier: string;
 }
 
 function parseCookie(value: string | undefined): OAuthCookie | null {
   if (!value) return null;
   try {
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
-    if (
-      typeof parsed.state === "string" &&
-      typeof parsed.codeVerifier === "string"
-    ) {
+    if (typeof parsed.state === "string") {
       return parsed;
     }
     return null;
@@ -78,23 +75,31 @@ export async function GET(request: Request): Promise<NextResponse> {
     return redirectWithError("invalid_state");
   }
 
-  const clientId = process.env.LINKEDIN_CLIENT_ID;
-  const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+  const clientId = sanitizeOAuthEnvValue(process.env.LINKEDIN_CLIENT_ID);
+  const clientSecret = sanitizeOAuthEnvValue(process.env.LINKEDIN_CLIENT_SECRET);
   if (!clientId || !clientSecret) {
     return redirectWithError("not_configured");
   }
 
   const redirectUri =
-    process.env.LINKEDIN_REDIRECT_URI ??
+    sanitizeOAuthEnvValue(process.env.LINKEDIN_REDIRECT_URI) ??
     `${url.origin}/api/accounts/oauth/linkedin/callback`;
 
   try {
+    console.error("LinkedIn OAuth callback exchanging code.", {
+      clientId,
+      clientSecretLength: clientSecret.length,
+      redirectUri,
+      codeLength: params.code.length,
+      hasCookie: true,
+      stateMatches: params.state === cookie.state,
+    });
+
     const token = await exchangeCodeForToken({
       clientId,
       clientSecret,
       redirectUri,
       code: params.code,
-      codeVerifier: cookie.codeVerifier,
     });
 
     const profile = await fetchMemberProfile(token.access_token);

@@ -87,7 +87,13 @@ async function run(): Promise<void> {
     if (request.url.includes("/rest/posts")) {
       return new Response(
         JSON.stringify({ id: "urn:li:share:example123" }),
-        { status: 201, headers: { "Content-Type": "application/json" } },
+        {
+          status: 201,
+          headers: {
+            "Content-Type": "application/json",
+            "x-restli-id": "urn:li:share:header123",
+          },
+        },
       );
     }
 
@@ -126,12 +132,29 @@ async function run(): Promise<void> {
     const textResult = await adapter.publishPost(createInput());
     assert.equal(textResult.ok, true);
     if (textResult.ok) {
-      assert.ok(textResult.publishedUrl.includes("linkedin.com"));
+      assert.equal(
+        textResult.publishedUrl,
+        "https://www.linkedin.com/feed/update/urn:li:share:header123",
+      );
     }
 
     const postRequest = requests.find((request) => request.url.includes("/rest/posts"));
     assert.ok(postRequest);
     assert.equal(postRequest?.headers.get("Idempotency-Key"), "target-1:123e4567-e89b-12d3-a456-426614174000");
+    assert.equal(postRequest?.headers.get("LinkedIn-Version"), "202607");
+
+    const postBody = await postRequest?.json();
+    assert.equal(postBody.lifecycleState, "PUBLISHED");
+    assert.equal(postBody.isReshareDisabledByAuthor, false);
+
+    // publishPost with custom apiVersion sends that version in the header.
+    const customVersionAdapter = new LinkedInAdapter({ uploadDir, apiVersion: "202501" });
+    await customVersionAdapter.publishPost(createInput({ targetId: "target-custom-version" }));
+    const customVersionRequest = requests.find(
+      (request) => request.url.includes("/rest/posts") && request.headers.get("Idempotency-Key")?.includes("target-custom-version"),
+    );
+    assert.ok(customVersionRequest);
+    assert.equal(customVersionRequest?.headers.get("LinkedIn-Version"), "202501");
 
     // publishPost with image triggers upload flow.
     const imageResult = await adapter.publishPost(createInput({ media: [image] }));
@@ -141,6 +164,32 @@ async function run(): Promise<void> {
       request.url.includes("/v2/assets?action=registerUpload"),
     );
     assert.ok(registerRequest);
+
+    // publishPost falls back to response body id when x-restli-id header is absent.
+    const bodyIdAdapter = new LinkedInAdapter({
+      uploadDir,
+      fetch: async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const request = new Request(input, init);
+        requests.push(request);
+        if (request.url.includes("/rest/posts")) {
+          return new Response(
+            JSON.stringify({ id: "urn:li:share:bodyFallback" }),
+            { status: 201, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+    const bodyIdResult = await bodyIdAdapter.publishPost(
+      createInput({ targetId: "target-body-id" }),
+    );
+    assert.equal(bodyIdResult.ok, true);
+    if (bodyIdResult.ok) {
+      assert.equal(
+        bodyIdResult.publishedUrl,
+        "https://www.linkedin.com/feed/update/urn:li:share:bodyFallback",
+      );
+    }
 
     // fetchAnalytics returns zeros.
     const analytics = await adapter.fetchAnalytics({

@@ -48,7 +48,7 @@ interface AuthorizationUrlInput {
   clientId: string;
   redirectUri: string;
   state: string;
-  codeChallenge: string;
+  codeChallenge?: string;
   scopes?: string[];
 }
 
@@ -59,8 +59,10 @@ export function buildAuthorizationUrl(input: AuthorizationUrlInput): string {
   url.searchParams.set("redirect_uri", input.redirectUri);
   url.searchParams.set("state", input.state);
   url.searchParams.set("scope", (input.scopes ?? LINKEDIN_OAUTH_SCOPES).join(" "));
-  url.searchParams.set("code_challenge", input.codeChallenge);
-  url.searchParams.set("code_challenge_method", "S256");
+  if (input.codeChallenge) {
+    url.searchParams.set("code_challenge", input.codeChallenge);
+    url.searchParams.set("code_challenge_method", "S256");
+  }
   return url.toString();
 }
 
@@ -69,7 +71,7 @@ interface ExchangeCodeInput {
   clientSecret: string;
   redirectUri: string;
   code: string;
-  codeVerifier: string;
+  codeVerifier?: string;
 }
 
 export async function exchangeCodeForToken(
@@ -81,17 +83,39 @@ export async function exchangeCodeForToken(
     redirect_uri: input.redirectUri,
     client_id: input.clientId,
     client_secret: input.clientSecret,
-    code_verifier: input.codeVerifier,
+  });
+  if (input.codeVerifier) {
+    body.set("code_verifier", input.codeVerifier);
+  }
+
+  const requestHeaders = { "Content-Type": "application/x-www-form-urlencoded" };
+  const maskedBody = new URLSearchParams(body);
+  maskedBody.set("client_secret", maskSecret(input.clientSecret));
+  console.error("LinkedIn token exchange request.", {
+    url: LINKEDIN_TOKEN_URL,
+    headers: requestHeaders,
+    body: maskedBody.toString(),
+    clientId: input.clientId,
+    clientSecretLength: input.clientSecret.length,
+    redirectUri: input.redirectUri,
+    codeLength: input.code.length,
+    codeVerifierLength: input.codeVerifier?.length,
   });
 
   const response = await fetch(LINKEDIN_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: requestHeaders,
     body,
   });
 
   const data: unknown = await response.json();
   if (!response.ok) {
+    console.error("LinkedIn token exchange failed.", {
+      status: response.status,
+      redirectUri: input.redirectUri,
+      clientId: input.clientId,
+      response: data,
+    });
     throw new Error(`LinkedIn token exchange failed: ${response.status}`);
   }
 
@@ -145,4 +169,14 @@ export async function fetchMemberProfile(
 
 export function buildMemberUrn(memberId: string): string {
   return `urn:li:person:${memberId}`;
+}
+
+export function sanitizeOAuthEnvValue(value: string | undefined): string | undefined {
+  if (!value) return value;
+  return value.trim().replace(/^["']+|["']+$/g, "");
+}
+
+function maskSecret(secret: string): string {
+  if (secret.length <= 8) return "***";
+  return `${secret.slice(0, 3)}...${secret.slice(-3)}`;
 }
