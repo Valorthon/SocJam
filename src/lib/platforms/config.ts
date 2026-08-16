@@ -7,3 +7,13 @@ export function isLinkedInRealEnabled(): boolean {
     process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET,
   );
 }
+
+export function isTikTokRealEnabled(): boolean {
+  const adapter =
+    process.env.TIKTOK_ADAPTER ?? process.env.NEXT_PUBLIC_TIKTOK_ADAPTER;
+  if (adapter === "real") return true;
+  if (adapter === "mock") return false;
+  return Boolean(
+    process.env.TIKTOK_CLIENT_KEY && process.env.TIKTOK_CLIENT_SECRET,
+  );
+}
