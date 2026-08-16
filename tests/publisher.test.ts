@@ -163,6 +163,20 @@ async function run(): Promise<void> {
   assert.equal(loggedContext.postId, "post-1");
   assert.equal(loggedContext.targetId, "target-x");
 
+  const retryableTimeout = fixture();
+  retryableTimeout.post.targets[0].platform = "INSTAGRAM";
+  retryableTimeout.post.targets[0].account.platform = "INSTAGRAM";
+  const timeoutX = adapter("X", async () => ({ ok: false, error: "Instagram is still processing this media. Please retry shortly.", retryable: true }));
+  const seventh = service(retryableTimeout.post, adaptersFor(timeoutX, successfulLinkedIn));
+  await seventh.publish("post-1", "user-1");
+  assert.equal(retryableTimeout.post.targets[0].status, "FAILED", "retryable TIMEOUT must land FAILED so retry can reclaim it");
+  assert.equal(
+    seventh.errors.get("target-x"),
+    "Instagram is still processing this media. Please retry shortly.",
+  );
+  assert.equal(retryableTimeout.post.targets[0].account.status, "ACTIVE", "retryable failures must not flag RECONNECT_REQUIRED");
+  assert.equal(seventh.statuses.at(-1), "PARTIALLY_FAILED");
+
   const concurrent = fixture();
   let publishCalls = 0;
   const concurrentX = adapter("X", async () => { publishCalls += 1; return { ok: true, publishedUrl: "https://mock.local/x" }; });

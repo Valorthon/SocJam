@@ -56,7 +56,12 @@ import {
  */
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
-const DEFAULT_POLL_MAX_ATTEMPTS = 15; // 15 × 2s = 30s ceiling.
+// spec: 10s ceiling. publishPost runs inline under /api/cron/publish-due and
+// publish server actions, where host function budgets can be as low as ~10s
+// (Vercel hobby). Poll exhaustion returns TIMEOUT with retryable=true so the
+// target lands FAILED and is re-attempted on retry instead of blowing the
+// invocation budget.
+const DEFAULT_POLL_MAX_ATTEMPTS = 5;
 
 export interface RealInstagramAdapterDependencies {
   loadMetaConfig: () => MetaConfig;
