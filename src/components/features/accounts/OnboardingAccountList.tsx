@@ -10,23 +10,33 @@ import {
   PLATFORMS,
   type Platform,
 } from "@/lib/platforms/constraints";
-import { isLinkedInRealEnabled, isTikTokRealEnabled } from "@/lib/platforms/config";
+import { useConnectMode } from "@/lib/api";
 
 const LINKEDIN_OAUTH_URL = "/api/accounts/oauth/linkedin";
 const TIKTOK_OAUTH_URL = "/api/accounts/oauth/tiktok";
+const META_OAUTH_START_URL = "/api/oauth/meta/start";
 
 export function OnboardingAccountList() {
   const router = useRouter();
+  const connectModeQuery = useConnectMode();
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
+  const modes = connectModeQuery.data?.modes;
 
   function startConnect(platform: Platform) {
-    if (platform === "LINKEDIN" && isLinkedInRealEnabled()) {
-      window.location.href = LINKEDIN_OAUTH_URL;
+    if (
+      (platform === "TIKTOK" || platform === "LINKEDIN") &&
+      modes?.[platform] === "real"
+    ) {
+      window.location.href =
+        platform === "TIKTOK" ? TIKTOK_OAUTH_URL : LINKEDIN_OAUTH_URL;
       return;
     }
 
-    if (platform === "TIKTOK" && isTikTokRealEnabled()) {
-      window.location.href = TIKTOK_OAUTH_URL;
+    if (
+      (platform === "FACEBOOK" || platform === "INSTAGRAM") &&
+      modes?.[platform] === "real"
+    ) {
+      window.location.href = `${META_OAUTH_START_URL}?platform=${platform}`;
       return;
     }
 

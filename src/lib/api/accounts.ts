@@ -1,10 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 
 import { requestJson, requestNoContent } from "@/lib/api/client";
 import {
   accountIdParamsSchema,
   connectAccountSchema,
+  connectModeResponseSchema,
+  finalizeOauthSchema,
+  metaPageListResponseSchema,
   type ConnectAccountInput,
+  type ConnectModeResponse,
+  type MetaPage,
+  type MetaPageListResponse,
 } from "@/lib/validations/account";
 import {
   accountListResponseSchema,
@@ -14,6 +21,8 @@ import {
 
 export const accountQueryKeys = {
   all: ["accounts"] as const,
+  connectMode: ["accounts", "connect-mode"] as const,
+  metaPages: ["accounts", "meta", "pages"] as const,
 };
 
 async function fetchAccounts(): Promise<SocialAccountDto[]> {
@@ -58,6 +67,40 @@ async function disconnectAccount(accountId: string): Promise<void> {
   });
 }
 
+async function fetchMetaPages(): Promise<MetaPageListResponse> {
+  const response = await requestJson(
+    "/api/oauth/meta/pages",
+    { method: "GET" },
+    metaPageListResponseSchema,
+  );
+  return response;
+}
+
+async function fetchConnectMode(): Promise<ConnectModeResponse> {
+  return requestJson(
+    "/api/accounts/connect-mode",
+    { method: "GET" },
+    connectModeResponseSchema,
+  );
+}
+
+async function finalizeMetaConnection(input: { pageId: string }): Promise<void> {
+  const parsed = finalizeOauthSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error("Please select a page to finalize the connection.");
+  }
+
+  await requestJson(
+    "/api/oauth/meta/finalize",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    },
+    z.object({ ok: z.literal(true) }),
+  );
+}
+
 export function useAccounts() {
   return useQuery({
     queryKey: accountQueryKeys.all,
@@ -83,6 +126,43 @@ export function useDisconnectAccount() {
     mutationFn: disconnectAccount,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: accountQueryKeys.all });
+    },
+  });
+}
+
+export function useMetaPages() {
+  return useQuery({
+    queryKey: accountQueryKeys.metaPages,
+    queryFn: fetchMetaPages,
+    retry: false,
+  });
+}
+
+export function useConnectMode() {
+  return useQuery({
+    queryKey: accountQueryKeys.connectMode,
+    queryFn: fetchConnectMode,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useFinalizeMetaConnection() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: finalizeMetaConnection,
+    onSuccess: async () => {
+      // Invalidate ONLY the connected-accounts list (`["accounts"]`) — by
+      // default invalidate's prefix match would also flag the meta-pages
+      // picker query (`["accounts","meta","pages"]`). Finalize deletes the
+      // op_meta_pages cookie, so a refetch of the picker would 410 and flash
+      // "session expired" on the picker while the screen is navigating back
+      // to connected accounts. `exact: true` keeps the spinner on the
+      // accounts list refetch and leaves the picker's stale cache untouched.
+      await queryClient.invalidateQueries({
+        queryKey: accountQueryKeys.all,
+        exact: true,
+      });
     },
   });
 }

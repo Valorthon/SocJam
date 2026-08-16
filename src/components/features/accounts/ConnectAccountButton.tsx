@@ -1,3 +1,5 @@
+"use client";
+
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +10,7 @@ interface ConnectAccountButtonProps {
   label?: string;
   showIcon?: boolean;
   className?: string;
+  disabled?: boolean;
 }
 
 export function ConnectAccountButton({
@@ -15,6 +18,7 @@ export function ConnectAccountButton({
   label = "Connect",
   showIcon = false,
   className,
+  disabled = false,
 }: ConnectAccountButtonProps) {
   return (
     <Button
@@ -23,6 +27,7 @@ export function ConnectAccountButton({
       size="sm"
       className={cn("shrink-0", className)}
       onClick={onClick}
+      disabled={disabled}
     >
       {showIcon ? <Plus className="mr-1.5 size-4" /> : null}
       {label}

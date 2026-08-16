@@ -60,9 +60,16 @@ export function createUploadRouteHandlers(dependencies: UploadRouteDependencies)
         bytes: new Uint8Array(await file.arrayBuffer()),
         mimeType: file.type,
       });
+      // Prefer the storage-provided public URL when present (Vercel Blob and
+      // any future S3/R2 impl). Falls back to the auth-gated local URL for
+      // the local-disk dev path. Meta's Instagram crawler requires a public
+      // URL — that is exactly the case `publicUrl` covers.
+      const url =
+        saved.publicUrl ??
+        new URL(`/api/uploads/${saved.fileName}`, request.url).toString();
       return NextResponse.json(uploadResponseSchema.parse({
         media: {
-          url: new URL(`/api/uploads/${saved.fileName}`, request.url).toString(),
+          url,
           type,
           mimeType: file.type,
           sizeBytes: file.size,

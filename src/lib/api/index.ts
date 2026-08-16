@@ -1,7 +1,10 @@
 export {
   useAccounts,
   useConnectAccount,
+  useConnectMode,
   useDisconnectAccount,
+  useFinalizeMetaConnection,
+  useMetaPages,
 } from "./accounts";
 export {
   useCreatePost,

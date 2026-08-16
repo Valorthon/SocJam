@@ -33,7 +33,7 @@ export const PLATFORM_CONSTRAINTS: Record<Platform, PlatformConstraints> = {
   },
   FACEBOOK: {
     maxChars: 63206,
-    maxImages: Infinity,
+    maxImages: 10,
     requiresImage: false,
     requiresVideo: false,
     maxVideoSeconds: 240,

@@ -23,6 +23,7 @@ Do NOT deviate from these tools or add new dependencies without explicit approva
 - **AI:** OpenAI API (GPT models) behind the `AIProvider` interface (`lib/ai/`). Model is configurable via the `AI_MODEL` env var. Other OpenAI tools/models — o
 r another provider entirely — must be addable by implementing the same interface; feature code never calls the OpenAI SDK directly.
 - **Platforms:** mock adapters behind the `SocialPlatformAdapter` interface (`lib/platforms/`)
+- **Media storage (approved addition):** `@vercel/blob` — maintainer-approved runtime dependency (PR #8 review). Used only inside `src/lib/storage/blob.ts` behind the `MediaStorage` interface (`src/lib/storage/`), selected by `getMediaStorage()` when `BLOB_READ_WRITE_TOKEN` is set. Do not import `@vercel/blob` anywhere else; feature code goes through the storage interface only.
 
 ## Hard rules (never violate)
 

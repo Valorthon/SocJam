@@ -15,13 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAccounts } from "@/lib/api";
+import { useAccounts, useConnectMode } from "@/lib/api";
 import {
   PLATFORM_ONBOARDING_DETAILS,
   PLATFORMS,
   type Platform,
 } from "@/lib/platforms/constraints";
-import { isLinkedInRealEnabled, isTikTokRealEnabled } from "@/lib/platforms/config";
 import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -49,6 +48,7 @@ function AccountListSkeleton() {
 
 const LINKEDIN_OAUTH_URL = "/api/accounts/oauth/linkedin";
 const TIKTOK_OAUTH_URL = "/api/accounts/oauth/tiktok";
+const META_OAUTH_START_URL = "/api/oauth/meta/start";
 
 export default function ConnectedAccountsPage() {
   return (
@@ -60,19 +60,28 @@ export default function ConnectedAccountsPage() {
 
 function ConnectedAccountsPageInner() {
   const accountsQuery = useAccounts();
+  const connectModeQuery = useConnectMode();
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
   const [addPlatformOpen, setAddPlatformOpen] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const accounts = accountsQuery.data ?? [];
+  const modes = connectModeQuery.data?.modes;
 
   useEffect(() => {
     const success = searchParams.get("success");
     const error = searchParams.get("error");
+    const oauthError = searchParams.get("oauth_error");
 
     if (success === "linkedin") {
       toast.success("LinkedIn account connected successfully.");
+    }
+    if (success === "facebook") {
+      toast.success("Facebook account connected successfully.");
+    }
+    if (success === "instagram") {
+      toast.success("Instagram account connected successfully.");
     }
 
     if (success === "tiktok") {
@@ -92,19 +101,40 @@ function ConnectedAccountsPageInner() {
       toast.error(messages[error] ?? "Unable to connect account. Please try again.");
     }
 
-    if (success || error) {
+    if (oauthError) {
+      const oauthMessages: Record<string, string> = {
+        oauth_canceled: "Authorization was canceled. No account was connected.",
+        missing_code: "Meta did not return an authorization code. Please try again.",
+        missing_state: "Your session expired during authorization. Please try again.",
+        state_mismatch: "Authorization state mismatch. Please try again.",
+        invalid_state: "Authorization state was invalid. Please try again.",
+        token_exchange_failed: "Meta rejected the authorization code. Please try again.",
+        pages_failed: "Unable to load your Facebook Pages. Please try again.",
+        no_pages: "Your Facebook account has no Pages to connect.",
+      };
+      toast.error(oauthMessages[oauthError] ?? "Unable to connect account. Please try again.");
+    }
+
+    if (success || error || oauthError) {
       router.replace("/settings/accounts");
     }
   }, [searchParams, router]);
 
   function startPlatformConnect(platform: Platform) {
-    if (platform === "LINKEDIN" && isLinkedInRealEnabled()) {
-      window.location.href = LINKEDIN_OAUTH_URL;
+    if (
+      (platform === "TIKTOK" || platform === "LINKEDIN") &&
+      modes?.[platform] === "real"
+    ) {
+      window.location.href =
+        platform === "TIKTOK" ? TIKTOK_OAUTH_URL : LINKEDIN_OAUTH_URL;
       return;
     }
 
-    if (platform === "TIKTOK" && isTikTokRealEnabled()) {
-      window.location.href = TIKTOK_OAUTH_URL;
+    if (
+      (platform === "FACEBOOK" || platform === "INSTAGRAM") &&
+      modes?.[platform] === "real"
+    ) {
+      window.location.href = `${META_OAUTH_START_URL}?platform=${platform}`;
       return;
     }
 
@@ -197,8 +227,9 @@ function ConnectedAccountsPageInner() {
           <DialogHeader>
             <DialogTitle>Add a platform</DialogTitle>
             <DialogDescription>
-              Choose a platform to connect it to SocJam. LinkedIn and TikTok
-              use real OAuth when credentials are configured.
+              Choose a platform to connect it to SocJam. LinkedIn, TikTok,
+              Facebook, and Instagram use real OAuth when credentials are
+              configured.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 sm:grid-cols-2">
