@@ -21,13 +21,21 @@ const handlers = createPostsRouteHandlers({
     db.socialAccount.findMany({
       where: { id: { in: accountIds }, userId, status: "ACTIVE" },
     }),
+  getUserTimezone: async (userId) => {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+    return user?.timezone ?? null;
+  },
   createPost: (input) =>
     db.$transaction((transaction) =>
       transaction.post.create({
         data: {
           userId: input.userId,
           baseText: input.baseText,
-          status: "DRAFT",
+          status: input.status,
+          scheduledAt: input.scheduledAt,
           idempotencyKey: input.idempotencyKey,
           targets: { create: input.targets },
           media: {

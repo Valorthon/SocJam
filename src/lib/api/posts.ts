@@ -4,9 +4,11 @@ import { requestJson } from "@/lib/api/client";
 import {
   createPostSchema,
   postIdParamsSchema,
-  type CreatePostInput,
   saveDraftSchema,
+  updatePostSchema,
+  type CreatePostInput,
   type SaveDraftInput,
+  type UpdatePostInput,
 } from "@/lib/validations/post";
 import {
   postDetailResponseSchema,
@@ -117,6 +119,38 @@ async function retryPost({ postId }: PostActionInput): Promise<PostDetailDto> {
   return response.post;
 }
 
+export interface UpdatePostActionInput {
+  postId: string;
+  update: UpdatePostInput;
+}
+
+async function updatePost({
+  postId,
+  update,
+}: UpdatePostActionInput): Promise<PostDetailDto> {
+  const parsed = postIdParamsSchema.safeParse({ id: postId });
+  if (!parsed.success) {
+    throw new Error("The selected post is invalid.");
+  }
+
+  const input = updatePostSchema.safeParse(update);
+  if (!input.success) {
+    throw new Error("Please review the update details and try again.");
+  }
+
+  const response = await requestJson(
+    `/api/posts/${parsed.data.id}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input.data),
+    },
+    postDetailResponseSchema,
+  );
+
+  return response.post;
+}
+
 export function usePosts() {
   return useQuery({
     queryKey: postQueryKeys.all,
@@ -173,6 +207,18 @@ export function useRetryPost() {
 
   return useMutation({
     mutationFn: retryPost,
+    onSuccess: async (post) => {
+      queryClient.setQueryData(postQueryKeys.detail(post.id), post);
+      await queryClient.invalidateQueries({ queryKey: postQueryKeys.all });
+    },
+  });
+}
+
+export function useUpdatePost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updatePost,
     onSuccess: async (post) => {
       queryClient.setQueryData(postQueryKeys.detail(post.id), post);
       await queryClient.invalidateQueries({ queryKey: postQueryKeys.all });

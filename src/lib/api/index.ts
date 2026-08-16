@@ -10,7 +10,9 @@ export {
   usePublishPost,
   useRetryPost,
   useSaveDraft,
+  useUpdatePost,
   type PostActionInput,
+  type UpdatePostActionInput,
 } from "./posts";
 export {
   useAiAdaptationQuota,

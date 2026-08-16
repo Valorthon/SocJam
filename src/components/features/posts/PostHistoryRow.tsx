@@ -28,6 +28,7 @@ export function PostHistoryRow({
 }: PostHistoryRowProps) {
   const canRetry = post.status === "FAILED" || post.status === "PARTIALLY_FAILED";
   const draftHref = getDraftComposerHref(post);
+  const detailHref = post.status === "DRAFT" ? null : `/posts/${post.id}`;
 
   return (
     <article className="relative grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/30 md:grid-cols-[auto_minmax(0,1fr)_6rem_8.5rem_10rem] md:items-center md:gap-4">
@@ -36,6 +37,12 @@ export function PostHistoryRow({
           href={draftHref}
           className="absolute inset-0 z-10 cursor-pointer rounded-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
           aria-label="Continue editing draft"
+        />
+      ) : detailHref ? (
+        <Link
+          href={detailHref}
+          className="absolute inset-0 z-10 cursor-pointer rounded-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
+          aria-label="View post details"
         />
       ) : null}
       <span

@@ -8,24 +8,30 @@ interface PublishFooterProps {
   selectedCount: number;
   isValid: boolean;
   isPublishing: boolean;
+  isScheduling: boolean;
   isUploading: boolean;
   isSavingDraft: boolean;
   draftSaveError: string | null;
   publishError: string | null;
+  scheduleError: string | null;
   onInvalidAttempt: () => void;
   onPublish: () => void;
+  onSchedule: () => void;
 }
 
 export function PublishFooter({
   selectedCount,
   isValid,
   isPublishing,
+  isScheduling,
   isUploading,
   isSavingDraft,
   draftSaveError,
   publishError,
+  scheduleError,
   onInvalidAttempt,
   onPublish,
+  onSchedule,
 }: PublishFooterProps) {
   const hasSelectedPlatforms = selectedCount > 0;
   const canPublish = hasSelectedPlatforms && isValid && !isUploading;
@@ -71,21 +77,41 @@ export function PublishFooter({
               {publishError}
             </p>
           ) : null}
+          {scheduleError ? (
+            <p className="mt-1 text-xs text-destructive" role="alert">
+              {scheduleError}
+            </p>
+          ) : null}
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
           <Button
             type="button"
             variant="outline"
             className="flex-1 sm:flex-none"
-            disabled={!canPublish || isPublishing}
+            disabled={!canPublish || isPublishing || isScheduling}
+            onClick={() => {
+              if (!isValid || selectedCount === 0) {
+                onInvalidAttempt();
+                return;
+              }
+              onSchedule();
+            }}
             title={
               canPublish
-                ? "Scheduling is coming soon"
-                : "Fix validation errors before scheduling"
+                ? "Schedule this post"
+                : isUploading
+                  ? "Wait for the media upload to finish"
+                  : hasSelectedPlatforms
+                    ? "Fix validation errors before scheduling"
+                    : "Select at least one platform first"
             }
           >
-            <CalendarClock className="mr-2" />
-            Schedule
+            {isScheduling ? (
+              <LoaderCircle className="mr-2 animate-spin" />
+            ) : (
+              <CalendarClock className="mr-2" />
+            )}
+            {isScheduling ? "Scheduling…" : "Schedule"}
           </Button>
           <Button
             type="button"
