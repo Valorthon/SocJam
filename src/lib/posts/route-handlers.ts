@@ -10,14 +10,20 @@ import {
   type PostWithRelations,
 } from "@/lib/posts";
 import { validationErrorSchema } from "@/lib/validations/common";
-import { createPostSchema, postIdParamsSchema } from "@/lib/validations/post";
+import {
+  createPostSchema,
+  postIdParamsSchema,
+  updatePostSchema,
+} from "@/lib/validations/post";
+import { validateScheduledAt } from "@/lib/validations/schedule";
 import { postDetailResponseSchema, postListResponseSchema } from "@/types";
 
 type DraftTarget = {
   accountId: string;
   platform: SocialAccount["platform"];
   adaptedText: string;
-  status: "DRAFT";
+  status: "DRAFT" | "SCHEDULED";
+  scheduledAt?: Date;
 };
 
 export interface PostsRouteDependencies {
@@ -28,10 +34,13 @@ export interface PostsRouteDependencies {
     userId: string,
     accountIds: string[],
   ) => Promise<SocialAccount[]>;
+  getUserTimezone: (userId: string) => Promise<string | null>;
   createPost: (input: {
     userId: string;
     baseText: string;
     idempotencyKey: string;
+    status: "DRAFT" | "SCHEDULED";
+    scheduledAt: Date | null;
     targets: DraftTarget[];
     media: MediaInput[];
   }) => Promise<PostWithRelations>;
@@ -42,6 +51,30 @@ export interface PostDetailRouteDependencies {
   findPostByIdAndUser: (
     id: string,
     userId: string,
+  ) => Promise<PostWithRelations | null>;
+}
+
+export interface UpdatePostRouteDependencies {
+  getAuthenticatedUser: typeof getAuthenticatedUser;
+  findPostByIdAndUser: (
+    id: string,
+    userId: string,
+  ) => Promise<PostWithRelations | null>;
+  getUserTimezone: (userId: string) => Promise<string | null>;
+  schedulePost: (
+    id: string,
+    userId: string,
+    input: { scheduledAt: Date; updatedAt: Date },
+  ) => Promise<PostWithRelations | null>;
+  reschedulePost: (
+    id: string,
+    userId: string,
+    input: { scheduledAt: Date; updatedAt: Date },
+  ) => Promise<PostWithRelations | null>;
+  cancelPost: (
+    id: string,
+    userId: string,
+    input: { updatedAt: Date },
   ) => Promise<PostWithRelations | null>;
 }
 
@@ -89,6 +122,13 @@ function conflictResponse(): NextResponse {
   );
 }
 
+function stalePostResponse(): NextResponse {
+  return NextResponse.json(
+    { error: "This post was modified elsewhere. Reload to see changes." },
+    { status: 409 },
+  );
+}
+
 export function createPostsRouteHandlers(dependencies: PostsRouteDependencies) {
   async function GET(): Promise<NextResponse> {
     const authentication = await dependencies.getAuthenticatedUser();
@@ -130,13 +170,32 @@ export function createPostsRouteHandlers(dependencies: PostsRouteDependencies) {
       return invalidRequestResponse("Invalid request.", fieldErrors(input.error));
     }
 
-    if (input.data.scheduledAt) {
-      return invalidRequestResponse("Scheduling is not supported yet.", {
-        scheduledAt: ["Scheduling is not supported yet."],
-      });
-    }
+    const scheduledAt = input.data.scheduledAt
+      ? new Date(input.data.scheduledAt)
+      : null;
+    const isScheduled = scheduledAt !== null;
 
     try {
+      if (isScheduled) {
+        const timezone = await dependencies.getUserTimezone(
+          authentication.userId,
+        );
+        if (!timezone) {
+          return invalidRequestResponse("Unable to determine your timezone.");
+        }
+
+        const scheduleValidation = validateScheduledAt(
+          scheduledAt,
+          timezone,
+          new Date(),
+        );
+        if (!scheduleValidation.valid) {
+          return invalidRequestResponse("Invalid scheduled time.", {
+            scheduledAt: [scheduleValidation.error ?? "Invalid scheduled time."],
+          });
+        }
+      }
+
       const existing = await dependencies.findPostByIdempotencyKey(
         input.data.idempotencyKey,
       );
@@ -163,7 +222,7 @@ export function createPostsRouteHandlers(dependencies: PostsRouteDependencies) {
         accounts.map((account) => [account.id, account]),
       );
       const errors: Record<string, string[]> = {};
-      const targets = input.data.targets.map((target, index) => {
+      const targets: DraftTarget[] = input.data.targets.map((target, index) => {
         const account = accountsById.get(target.accountId);
         if (!account) {
           throw new Error("Selected account was not loaded.");
@@ -182,7 +241,8 @@ export function createPostsRouteHandlers(dependencies: PostsRouteDependencies) {
           accountId: account.id,
           platform: account.platform,
           adaptedText: target.adaptedText,
-          status: "DRAFT" as const,
+          status: isScheduled ? "SCHEDULED" : "DRAFT",
+          ...(isScheduled ? { scheduledAt } : {}),
         };
       });
 
@@ -194,6 +254,8 @@ export function createPostsRouteHandlers(dependencies: PostsRouteDependencies) {
         userId: authentication.userId,
         baseText: input.data.baseText,
         idempotencyKey: input.data.idempotencyKey,
+        status: isScheduled ? "SCHEDULED" : "DRAFT",
+        scheduledAt,
         targets,
         media: input.data.media,
       });
@@ -270,6 +332,146 @@ export function createPostDetailRouteHandler(
       console.error("Unable to load post.", error);
       return NextResponse.json(
         { error: "Unable to load post." },
+        { status: 500 },
+      );
+    }
+  };
+}
+
+export function createUpdatePostRouteHandler(
+  dependencies: UpdatePostRouteDependencies,
+) {
+  return async (
+    request: Request,
+    { params }: { params: { id: string } },
+  ): Promise<NextResponse> => {
+    const authentication = await dependencies.getAuthenticatedUser();
+    if (!authentication.ok) return unauthorizedResponse();
+
+    const parsedParams = postIdParamsSchema.safeParse(params);
+    if (!parsedParams.success) {
+      return invalidRequestResponse(
+        "Invalid request.",
+        fieldErrors(parsedParams.error),
+      );
+    }
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return invalidRequestResponse("Invalid request.");
+    }
+
+    const input = updatePostSchema.safeParse(body);
+    if (!input.success) {
+      return invalidRequestResponse("Invalid request.", fieldErrors(input.error));
+    }
+
+    try {
+      const post = await dependencies.findPostByIdAndUser(
+        parsedParams.data.id,
+        authentication.userId,
+      );
+      if (!post) {
+        return NextResponse.json({ error: "Post not found." }, { status: 404 });
+      }
+
+      const clientUpdatedAt = new Date(input.data.updatedAt);
+      if (post.updatedAt.getTime() !== clientUpdatedAt.getTime()) {
+        return stalePostResponse();
+      }
+
+      let updated: PostWithRelations | null = null;
+
+      if (input.data.action === "schedule") {
+        if (post.status !== "DRAFT") {
+          return invalidRequestResponse("Only drafts can be scheduled.", {
+            action: ["Only drafts can be scheduled."],
+          });
+        }
+
+        const timezone = await dependencies.getUserTimezone(
+          authentication.userId,
+        );
+        if (!timezone) {
+          return invalidRequestResponse("Unable to determine your timezone.");
+        }
+
+        const scheduledAt = new Date(input.data.scheduledAt);
+        const scheduleValidation = validateScheduledAt(
+          scheduledAt,
+          timezone,
+          new Date(),
+        );
+        if (!scheduleValidation.valid) {
+          return invalidRequestResponse("Invalid scheduled time.", {
+            scheduledAt: [
+              scheduleValidation.error ?? "Invalid scheduled time.",
+            ],
+          });
+        }
+
+        updated = await dependencies.schedulePost(
+          post.id,
+          authentication.userId,
+          { scheduledAt, updatedAt: clientUpdatedAt },
+        );
+      } else if (input.data.action === "reschedule") {
+        if (post.status !== "SCHEDULED") {
+          return invalidRequestResponse("Only scheduled posts can be rescheduled.", {
+            action: ["Only scheduled posts can be rescheduled."],
+          });
+        }
+        const timezone = await dependencies.getUserTimezone(
+          authentication.userId,
+        );
+        if (!timezone) {
+          return invalidRequestResponse("Unable to determine your timezone.");
+        }
+
+        const scheduledAt = new Date(input.data.scheduledAt);
+        const scheduleValidation = validateScheduledAt(
+          scheduledAt,
+          timezone,
+          new Date(),
+        );
+        if (!scheduleValidation.valid) {
+          return invalidRequestResponse("Invalid scheduled time.", {
+            scheduledAt: [
+              scheduleValidation.error ?? "Invalid scheduled time.",
+            ],
+          });
+        }
+
+        updated = await dependencies.reschedulePost(
+          post.id,
+          authentication.userId,
+          { scheduledAt, updatedAt: clientUpdatedAt },
+        );
+      } else {
+        if (post.status !== "SCHEDULED") {
+          return invalidRequestResponse("Only scheduled posts can be cancelled.", {
+            action: ["Only scheduled posts can be cancelled."],
+          });
+        }
+
+        updated = await dependencies.cancelPost(post.id, authentication.userId, {
+          updatedAt: clientUpdatedAt,
+        });
+      }
+
+      if (!updated) {
+        return stalePostResponse();
+      }
+
+      return NextResponse.json(
+        postDetailResponseSchema.parse({ post: toPostDetailDto(updated) }),
+      );
+    } catch (error) {
+      console.error("Unable to update post.", error);
+      return NextResponse.json(
+        { error: "Unable to update post." },
         { status: 500 },
       );
     }

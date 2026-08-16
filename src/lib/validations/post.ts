@@ -81,8 +81,26 @@ export const postIdParamsSchema = z.object({
   id: z.string().cuid("Post ID must be valid"),
 });
 
+export const updatePostSchema = z.union([
+  z.object({
+    action: z.literal("schedule"),
+    scheduledAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  }),
+  z.object({
+    action: z.literal("reschedule"),
+    scheduledAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  }),
+  z.object({
+    action: z.literal("cancel"),
+    updatedAt: z.iso.datetime(),
+  }),
+]);
+
 export type PostTargetInput = z.infer<typeof postTargetInputSchema>;
 export type MediaInput = z.infer<typeof mediaInputSchema>;
 export type CreatePostInput = z.infer<typeof createPostSchema>;
 export type SaveDraftInput = z.infer<typeof saveDraftSchema>;
 export type PostIdParams = z.infer<typeof postIdParamsSchema>;
+export type UpdatePostInput = z.infer<typeof updatePostSchema>;

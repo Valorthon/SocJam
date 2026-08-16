@@ -27,14 +27,16 @@ const account: SocialAccount = {
 function postFixture(
   ownerId: string,
   idempotencyKey: string,
+  status: "DRAFT" | "SCHEDULED" = "DRAFT",
+  scheduledAt: Date | null = null,
   media: MediaInput[] = [],
 ): PostWithRelations {
   return {
     id: "post-1",
     userId: ownerId,
     baseText: "Hello from OmniPost",
-    status: "DRAFT",
-    scheduledAt: null,
+    status,
+    scheduledAt,
     idempotencyKey,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -49,8 +51,8 @@ function postFixture(
       accountId: account.id,
       platform: "X",
       adaptedText: "Hello from OmniPost",
-      status: "DRAFT",
-      scheduledAt: null,
+      status: status === "SCHEDULED" ? "SCHEDULED" : "DRAFT",
+      scheduledAt,
       publishedAt: null,
       publishedUrl: null,
       error: null,
@@ -83,9 +85,16 @@ async function run(): Promise<void> {
       posts.get(idempotencyKey) ?? null,
     findPostsByUser: async () => [],
     findActiveAccounts: async () => activeAccounts,
+    getUserTimezone: async () => "UTC",
     createPost: async (input) => {
       createdMedia = input.media;
-      const post = postFixture(input.userId, input.idempotencyKey, input.media);
+      const post = postFixture(
+        input.userId,
+        input.idempotencyKey,
+        input.status,
+        input.scheduledAt,
+        input.media,
+      );
       posts.set(input.idempotencyKey, post);
       return post;
     },
@@ -151,6 +160,55 @@ async function run(): Promise<void> {
   assert.deepEqual((await invalidMedia.json()).fieldErrors["targets.0"], [
     "Instagram requires an image",
   ]);
+
+  activeAccounts = [account];
+
+  const futureSlot = "2026-12-31T12:30:00.000Z";
+  const scheduled = await handlers.POST(
+    new Request("http://localhost/api/posts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        idempotencyKey: "123e4567-e89b-12d3-a456-426614174004",
+        baseText: "Scheduled post",
+        targets: [{ accountId: account.id }],
+        scheduledAt: futureSlot,
+      }),
+    }),
+  );
+  assert.equal(scheduled.status, 201);
+  const scheduledBody = await scheduled.json();
+  assert.equal(scheduledBody.post.status, "SCHEDULED");
+  assert.equal(scheduledBody.post.scheduledAt, futureSlot);
+  assert.equal(scheduledBody.post.targets[0].status, "SCHEDULED");
+
+  const pastTime = await handlers.POST(
+    new Request("http://localhost/api/posts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        idempotencyKey: "123e4567-e89b-12d3-a456-426614174005",
+        baseText: "Scheduled post",
+        targets: [{ accountId: account.id }],
+        scheduledAt: "2020-01-01T12:00:00.000Z",
+      }),
+    }),
+  );
+  assert.equal(pastTime.status, 400);
+
+  const invalidInterval = await handlers.POST(
+    new Request("http://localhost/api/posts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        idempotencyKey: "123e4567-e89b-12d3-a456-426614174006",
+        baseText: "Scheduled post",
+        targets: [{ accountId: account.id }],
+        scheduledAt: "2026-12-31T12:15:00.000Z",
+      }),
+    }),
+  );
+  assert.equal(invalidInterval.status, 400);
 }
 
 void run().catch((error: unknown) => {

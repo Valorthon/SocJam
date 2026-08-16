@@ -46,6 +46,7 @@ interface ComposerDraftState {
   variants: Record<string, ComposerVariant>;
   media: ComposerMedia[];
   tone: ComposerTone;
+  scheduledAt: string | null;
 }
 
 interface ComposerStore extends ComposerDraftState {
@@ -58,6 +59,7 @@ interface ComposerStore extends ComposerDraftState {
   setAiVariant: (accountId: string, adaptedText: string) => void;
   setMedia: (media: ComposerMedia[]) => void;
   setTone: (tone: ComposerTone) => void;
+  setScheduledAt: (scheduledAt: string | null) => void;
 }
 
 function createIdempotencyKey(): string {
@@ -72,6 +74,7 @@ function createInitialDraft(): ComposerDraftState {
     variants: {},
     media: [],
     tone: "professional",
+    scheduledAt: null,
   };
 }
 
@@ -113,6 +116,7 @@ export const useComposerStore = create<ComposerStore>()((set) => ({
         height: asset.height,
       })),
       tone: "professional",
+      scheduledAt: draft.scheduledAt,
     });
 
     return true;
@@ -205,4 +209,5 @@ export const useComposerStore = create<ComposerStore>()((set) => ({
         }),
       setMedia: (media) => set({ media }),
   setTone: (tone) => set({ tone }),
+  setScheduledAt: (scheduledAt) => set({ scheduledAt }),
 }));

@@ -9,6 +9,7 @@ import {
   usePosts,
   usePublishPost,
   useSaveDraft,
+  useUpdatePost,
 } from "@/lib/api";
 import {
   getLatestDraftId,
@@ -25,9 +26,27 @@ import { MediaUploader } from "./MediaUploader";
 import { PlatformSelector } from "./PlatformSelector";
 import { PlatformVariantCard } from "./PlatformVariantCard";
 import { PublishFooter } from "./PublishFooter";
+import { SchedulePicker } from "./SchedulePicker";
+import {
+  localDateTimeToUtc,
+  nextScheduleSlot,
+} from "@/lib/date";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function Composer() {
+interface ComposerProps {
+  timezone: string;
+}
+
+export function Composer({ timezone }: ComposerProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedDraftId = searchParams.get("id");
@@ -39,15 +58,20 @@ export function Composer() {
   const recentDraft = usePost(hasRequestedDraft ? null : latestDraftId);
   const saveDraft = useSaveDraft();
   const publishPost = usePublishPost();
+  const updatePost = useUpdatePost();
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [draftSaveError, setDraftSaveError] = useState<string | null>(null);
   const [isPublishSubmitted, setIsPublishSubmitted] = useState(false);
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [draftLoadError, setDraftLoadError] = useState<string | null>(null);
   const [isContinueEditingOpen, setIsContinueEditingOpen] = useState(false);
   const [hasDismissedResumePrompt, setHasDismissedResumePrompt] =
     useState(false);
   const publishRequestedRef = useRef(false);
+  const scheduleRequestedRef = useRef(false);
   const draftSaveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const saveDraftSnapshotRef = useRef<() => Promise<unknown>>(
     () => Promise.resolve(),
@@ -62,12 +86,14 @@ export function Composer() {
   const media = useComposerStore((state) => state.media);
   const tone = useComposerStore((state) => state.tone);
   const idempotencyKey = useComposerStore((state) => state.idempotencyKey);
+  const scheduledAt = useComposerStore((state) => state.scheduledAt);
   const selectAccount = useComposerStore((state) => state.selectAccount);
   const deselectAccount = useComposerStore((state) => state.deselectAccount);
   const setVariantText = useComposerStore((state) => state.setVariantText);
   const setAiVariant = useComposerStore((state) => state.setAiVariant);
   const setMedia = useComposerStore((state) => state.setMedia);
   const setTone = useComposerStore((state) => state.setTone);
+  const setScheduledAt = useComposerStore((state) => state.setScheduledAt);
   const beginNewDraft = useComposerStore((state) => state.beginNewDraft);
   const loadDraft = useComposerStore((state) => state.loadDraft);
   const { selectedVariants, validations, variantsAreValid, firstInvalidAccountId } =
@@ -247,6 +273,15 @@ export function Composer() {
     [],
   );
 
+  useEffect(() => {
+    if (!isScheduleOpen || scheduledAt) return;
+
+    const now = new Date();
+    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+    const slot = nextScheduleSlot(oneHourLater, timezone);
+    setScheduledAt(localDateTimeToUtc(slot, timezone).toISOString());
+  }, [isScheduleOpen, scheduledAt, setScheduledAt, timezone]);
+
   const isPublishing = isPublishSubmitted || publishPost.isPending;
   const handlePublish = useCallback(async () => {
     if (publishRequestedRef.current) {
@@ -286,6 +321,64 @@ export function Composer() {
     saveDraftSnapshot,
     scrollToFirstInvalidVariant,
     selectedVariants,
+    variantsAreValid,
+  ]);
+
+  const handleSchedule = useCallback(async () => {
+    if (scheduleRequestedRef.current) return;
+
+    if (!variantsAreValid || selectedVariants.length === 0 || !scheduledAt) {
+      scrollToFirstInvalidVariant();
+      return;
+    }
+
+    setScheduleError(null);
+    scheduleRequestedRef.current = true;
+    setIsScheduling(true);
+
+    try {
+      const draft = await saveDraftSnapshot();
+      if (!draft) {
+        throw new Error("A post cannot be scheduled without draft content.");
+      }
+
+      await updatePost.mutateAsync({
+        postId: draft.id,
+        update: {
+          action: "schedule",
+          scheduledAt,
+          updatedAt: draft.updatedAt,
+        },
+      });
+
+      skipDraftSaveOnUnmountRef.current = true;
+      beginNewDraft();
+      setIsScheduleOpen(false);
+      router.push("/calendar");
+    } catch (error) {
+      scheduleRequestedRef.current = false;
+      setIsScheduling(false);
+      if (
+        error instanceof Error &&
+        error.message.includes("modified elsewhere")
+      ) {
+        setScheduleError(
+          "This post was modified elsewhere. Reload to see changes.",
+        );
+      } else {
+        setScheduleError(
+          "We couldn’t schedule this post. Please review the time and try again.",
+        );
+      }
+    }
+  }, [
+    beginNewDraft,
+    router,
+    saveDraftSnapshot,
+    scheduledAt,
+    scrollToFirstInvalidVariant,
+    selectedVariants,
+    updatePost,
     variantsAreValid,
   ]);
 
@@ -379,13 +472,56 @@ export function Composer() {
         selectedCount={selectedAccountIds.length}
         isValid={variantsAreValid}
         isPublishing={isPublishing}
+        isScheduling={isScheduling || updatePost.isPending}
         isUploading={isUploadingMedia}
         isSavingDraft={saveDraft.isPending}
         draftSaveError={draftSaveError}
         publishError={publishError}
+        scheduleError={scheduleError}
         onInvalidAttempt={scrollToFirstInvalidVariant}
         onPublish={handlePublish}
+        onSchedule={() => setIsScheduleOpen(true)}
       />
+
+      <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Schedule post</DialogTitle>
+            <DialogDescription>
+              Choose when this post should go live.
+            </DialogDescription>
+          </DialogHeader>
+
+          <SchedulePicker
+            timezone={timezone}
+            value={scheduledAt}
+            onChange={setScheduledAt}
+          />
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsScheduleOpen(false)}
+              disabled={isScheduling}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSchedule}
+              disabled={
+                !variantsAreValid ||
+                selectedVariants.length === 0 ||
+                !scheduledAt ||
+                isScheduling
+              }
+            >
+              {isScheduling ? "Scheduling…" : "Schedule post"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ContinueEditingModal
         draft={recentDraft.data ?? null}

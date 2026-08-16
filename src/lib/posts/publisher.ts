@@ -42,6 +42,8 @@ export interface PublisherDependencies {
   markAccountReconnectRequired: (accountId: string) => Promise<void>;
   getAdapter?: (platform: Platform) => SocialPlatformAdapter;
   now?: () => Date;
+  publishableStatuses?: readonly TargetStatus[];
+  skipMarkTargetPublishing?: boolean;
 }
 
 export function safePublishError(
@@ -57,7 +59,8 @@ export function createPublisher(dependencies: PublisherDependencies) {
     const post = await dependencies.claimPost(postId, userId);
     if (!post) return dependencies.loadResult(postId, userId);
 
-    const pendingTargets = post.targets.filter((target) => target.status === "DRAFT");
+    const publishableStatuses = dependencies.publishableStatuses ?? ["DRAFT"];
+    const pendingTargets = post.targets.filter((target) => publishableStatuses.includes(target.status));
     if (pendingTargets.length === 0) {
       await dependencies.updatePostStatus(post.id, derivePostStatus(post.targets));
       return dependencies.loadResult(post.id, userId);
@@ -68,7 +71,9 @@ export function createPublisher(dependencies: PublisherDependencies) {
     const now = dependencies.now ?? (() => new Date());
 
     for (const target of pendingTargets) {
-      await dependencies.markTargetPublishing(target.id);
+      if (!dependencies.skipMarkTargetPublishing) {
+        await dependencies.markTargetPublishing(target.id);
+      }
       if (!target.account || !target.accountId) {
         await dependencies.markTargetFailed(
           target.id,
@@ -121,7 +126,7 @@ export const publishPostForUser = createPublisher({
     const { db } = await import("@/lib/db");
     return db.$transaction(async (transaction) => {
       const claim = await transaction.post.updateMany({
-        where: { id: postId, userId, status: "DRAFT" },
+        where: { id: postId, userId, status: { in: ["DRAFT", "SCHEDULED"] } },
         data: { status: "PUBLISHING" },
       });
       if (claim.count === 0) return null;

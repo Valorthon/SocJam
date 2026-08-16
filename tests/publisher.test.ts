@@ -170,6 +170,30 @@ async function run(): Promise<void> {
   const sixth = service(concurrent.post, adaptersFor(concurrentX, concurrentLinkedIn));
   await Promise.all([sixth.publish("post-1", "user-1"), sixth.publish("post-1", "user-1")]);
   assert.equal(publishCalls, 2);
+
+  const scheduled = fixture();
+  scheduled.post.status = "SCHEDULED";
+  scheduled.post.targets.forEach((target) => { target.status = "PUBLISHING"; });
+  const scheduledStatuses: PostStatus[] = [];
+  const scheduledCalls: string[] = [];
+  const scheduledDependencies = {
+    claimPost: async () => { scheduled.post.status = "PUBLISHING"; return scheduled.post; },
+    findPost: async () => scheduled.post,
+    loadResult: async () => scheduled.post as unknown as PostWithRelations,
+    updatePostStatus: async (_id: string, status: PostStatus) => { scheduledStatuses.push(status); scheduled.post.status = status; },
+    markTargetPublishing: async () => undefined,
+    markTargetPublished: async (id: string) => { scheduledCalls.push(`published:${id}`); scheduled.post.targets.find((target) => target.id === id)!.status = "PUBLISHED"; },
+    markTargetFailed: async () => undefined,
+    markAccountReconnectRequired: async () => undefined,
+    getAdapter: (platform: Platform) => adaptersFor(successful, successfulLinkedIn)[platform],
+    publishableStatuses: ["PUBLISHING"] as const,
+    skipMarkTargetPublishing: true,
+  };
+  const scheduledPublisher = createPublisher(scheduledDependencies);
+  await scheduledPublisher("post-1", "user-1");
+  assert.deepEqual(scheduled.post.targets.map((target) => target.status), ["PUBLISHED", "PUBLISHED"]);
+  assert.equal(scheduled.post.status, "PUBLISHED");
+
   console.log("Publisher tests passed.");
 }
 

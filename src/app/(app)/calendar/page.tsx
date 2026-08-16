@@ -1,11 +1,19 @@
-export default function CalendarPage() {
+import { CalendarClient } from "@/components/features/calendar/CalendarClient";
+import { getRequiredAppUser } from "@/lib/app-user";
+
+export default async function CalendarPage() {
+  const user = await getRequiredAppUser();
+
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-      <h2 className="text-2xl font-semibold">Calendar</h2>
-      <p className="max-w-md text-muted-foreground">
-        Scheduling is coming soon. This page will show your queued and scheduled
-        posts in a calendar view.
-      </p>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold">Calendar</h1>
+        <p className="text-sm text-muted-foreground">
+          Month view of your scheduled posts. Week view is planned for a future
+          update.
+        </p>
+      </div>
+      <CalendarClient timezone={user.timezone} />
     </div>
   );
 }
