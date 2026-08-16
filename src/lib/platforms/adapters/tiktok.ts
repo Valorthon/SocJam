@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import type { MediaAsset, PostTarget, SocialAccount } from "@prisma/client";
 import { z } from "zod";
 import {
@@ -22,6 +20,7 @@ import type {
 } from "@/lib/platforms/types";
 import { analyticsResultSchema, authCheckResultSchema, publishResultSchema } from "@/lib/platforms/types";
 import { decryptToken, encryptToken } from "@/lib/tokens/crypto";
+import { type LoadedMedia, loadMediaFromUrl } from "./mediaLoader";
 
 const TIKTOK_PUBLISH_VIDEO_INIT_URL =
   "https://open.tiktokapis.com/v2/post/publish/video/init/";
@@ -80,61 +79,20 @@ export interface TikTokAdapterDependencies {
   decryptToken: typeof decryptToken;
   encryptToken: typeof encryptToken;
   uploadDir: string;
+  /**
+   * Resolves a media URL to its raw bytes + MIME type. Defaults to the shared
+   * `loadMediaFromUrl` helper (local-disk dev path + public HTTP fetch), so
+   * production Blob URLs work without a local file. Injectable for tests.
+   */
+  loadMedia: (url: string) => Promise<LoadedMedia | null>;
   fetch?: typeof fetch;
   now?: () => Date;
   pollIntervalMs?: number;
   maxPollDurationMs?: number;
 }
 
-function getUploadDir(): string {
-  return path.resolve(process.env.UPLOAD_DIR ?? "./uploads");
-}
-
 function getFetch(): typeof fetch {
   return fetch;
-}
-
-function fileNameFromUrl(url: string): string | null {
-  try {
-    const pathname = new URL(url).pathname;
-    const fileName = pathname.split("/").pop();
-    return fileName && /^[0-9a-f-]{36}\.(mp4|webm|mov)$/i.test(fileName)
-      ? fileName
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-async function loadMediaFromDisk(
-  url: string,
-  uploadDir: string,
-): Promise<{ bytes: Buffer; mimeType: string } | null> {
-  const fileName = fileNameFromUrl(url);
-  if (!fileName) return null;
-
-  const filePath = path.join(uploadDir, fileName);
-  try {
-    const bytes = await readFile(filePath);
-    const extension = path.extname(fileName).slice(1).toLowerCase();
-    const mimeType = extensionToMimeType(extension);
-    if (!mimeType) return null;
-    return { bytes, mimeType };
-  } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return null;
-    }
-    throw error;
-  }
-}
-
-function extensionToMimeType(extension: string): string | null {
-  const map: Record<string, string> = {
-    mp4: "video/mp4",
-    webm: "video/webm",
-    mov: "video/quicktime",
-  };
-  return map[extension] ?? null;
 }
 
 function isRetryableFailReason(reason: string | undefined): boolean {
@@ -223,6 +181,11 @@ export class TikTokAdapter implements SocialPlatformAdapter {
   private readonly now: () => Date;
 
   constructor(dependencies: Partial<TikTokAdapterDependencies> = {}) {
+    const uploadDir = dependencies.uploadDir ?? process.env.UPLOAD_DIR ?? "./uploads";
+    const fetchFn = dependencies.fetch ?? getFetch();
+    const loadMedia =
+      dependencies.loadMedia ??
+      ((url: string) => loadMediaFromUrl(url, { uploadDir, fetch: fetchFn }));
     this.dependencies = {
       clientKey: dependencies.clientKey ?? process.env.TIKTOK_CLIENT_KEY ?? "",
       clientSecret:
@@ -237,14 +200,15 @@ export class TikTokAdapter implements SocialPlatformAdapter {
       fetchCreatorInfo: dependencies.fetchCreatorInfo ?? fetchCreatorInfo,
       decryptToken: dependencies.decryptToken ?? decryptToken,
       encryptToken: dependencies.encryptToken ?? encryptToken,
-      uploadDir: dependencies.uploadDir ?? getUploadDir(),
-      fetch: dependencies.fetch ?? getFetch(),
+      uploadDir,
+      loadMedia,
+      fetch: fetchFn,
       now: dependencies.now ?? (() => new Date()),
       pollIntervalMs: dependencies.pollIntervalMs ?? POLL_INTERVAL_MS,
       maxPollDurationMs: dependencies.maxPollDurationMs ?? MAX_POLL_DURATION_MS,
     };
-    this.fetch = dependencies.fetch ?? getFetch();
-    this.now = dependencies.now ?? (() => new Date());
+    this.fetch = fetchFn;
+    this.now = this.dependencies.now!;
   }
 
   getConstraints() {
@@ -295,7 +259,7 @@ export class TikTokAdapter implements SocialPlatformAdapter {
       });
     }
 
-    const loaded = await loadMediaFromDisk(video.url, this.dependencies.uploadDir);
+    const loaded = await this.dependencies.loadMedia(video.url);
     if (!loaded) {
       return publishResultSchema.parse({
         ok: false,
