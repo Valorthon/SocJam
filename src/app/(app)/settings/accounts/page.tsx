@@ -21,7 +21,7 @@ import {
   PLATFORMS,
   type Platform,
 } from "@/lib/platforms/constraints";
-import { isLinkedInRealEnabled } from "@/lib/platforms/config";
+import { isLinkedInRealEnabled, isTikTokRealEnabled } from "@/lib/platforms/config";
 import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -48,6 +48,7 @@ function AccountListSkeleton() {
 }
 
 const LINKEDIN_OAUTH_URL = "/api/accounts/oauth/linkedin";
+const TIKTOK_OAUTH_URL = "/api/accounts/oauth/tiktok";
 
 export default function ConnectedAccountsPage() {
   return (
@@ -74,15 +75,19 @@ function ConnectedAccountsPageInner() {
       toast.success("LinkedIn account connected successfully.");
     }
 
+    if (success === "tiktok") {
+      toast.success("TikTok account connected successfully.");
+    }
+
     if (error) {
       const messages: Record<string, string> = {
         unauthorized: "You must be signed in to connect an account.",
         invalid_request: "Invalid OAuth request. Please try again.",
         invalid_state: "Security validation failed. Please try again.",
-        not_configured: "LinkedIn OAuth is not configured.",
-        access_denied: "LinkedIn authorization was cancelled.",
+        not_configured: "OAuth is not configured for the selected platform.",
+        access_denied: "Authorization was cancelled.",
         account_already_connected: "This account is already connected.",
-        unable_to_connect: "Unable to connect LinkedIn account. Please try again.",
+        unable_to_connect: "Unable to connect account. Please try again.",
       };
       toast.error(messages[error] ?? "Unable to connect account. Please try again.");
     }
@@ -95,6 +100,11 @@ function ConnectedAccountsPageInner() {
   function startPlatformConnect(platform: Platform) {
     if (platform === "LINKEDIN" && isLinkedInRealEnabled()) {
       window.location.href = LINKEDIN_OAUTH_URL;
+      return;
+    }
+
+    if (platform === "TIKTOK" && isTikTokRealEnabled()) {
+      window.location.href = TIKTOK_OAUTH_URL;
       return;
     }
 
@@ -187,8 +197,8 @@ function ConnectedAccountsPageInner() {
           <DialogHeader>
             <DialogTitle>Add a platform</DialogTitle>
             <DialogDescription>
-              Choose a platform to connect it to OmniPost. LinkedIn uses real
-              OAuth when credentials are configured.
+              Choose a platform to connect it to OmniPost. LinkedIn and TikTok
+              use real OAuth when credentials are configured.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 sm:grid-cols-2">

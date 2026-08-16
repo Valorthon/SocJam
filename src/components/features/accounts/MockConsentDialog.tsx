@@ -75,7 +75,7 @@ export function MockConsentDialog({
         <DialogHeader>
           <DialogTitle>Connect {name}</DialogTitle>
           <DialogDescription>
-            This simulated consent flow connects a mock {name} account for your
+            This simulated consent flow connects a {name} test account for your
             OmniPost workspace.
           </DialogDescription>
         </DialogHeader>

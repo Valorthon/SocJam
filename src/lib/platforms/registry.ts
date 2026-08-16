@@ -5,7 +5,8 @@ import { mockInstagramAdapter } from "@/lib/platforms/adapters/mockInstagram";
 import { mockLinkedInAdapter } from "@/lib/platforms/adapters/mockLinkedIn";
 import { mockTikTokAdapter } from "@/lib/platforms/adapters/mockTikTok";
 import { mockXAdapter } from "@/lib/platforms/adapters/mockX";
-import { isLinkedInRealEnabled } from "@/lib/platforms/config";
+import { tiktokAdapter } from "@/lib/platforms/adapters/tiktok";
+import { isLinkedInRealEnabled, isTikTokRealEnabled } from "@/lib/platforms/config";
 import { type SocialPlatformAdapter } from "@/lib/platforms/types";
 
 const mockAdapters: Record<Platform, SocialPlatformAdapter> = {
@@ -19,6 +20,10 @@ const mockAdapters: Record<Platform, SocialPlatformAdapter> = {
 export function getPlatformAdapter(platform: Platform): SocialPlatformAdapter {
   if (platform === "LINKEDIN" && isLinkedInRealEnabled()) {
     return linkedInAdapter;
+  }
+
+  if (platform === "TIKTOK" && isTikTokRealEnabled()) {
+    return tiktokAdapter;
   }
 
   if (process.env.MOCK_PLATFORMS !== "true") {
