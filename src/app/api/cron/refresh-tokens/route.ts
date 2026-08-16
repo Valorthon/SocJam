@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import {
   type AccountStatus,
   type Platform,
@@ -30,7 +31,11 @@ export function isCronRefreshAuthorized(request: Request): boolean {
   if (!cronSecret || cronSecret.trim() === "") return false;
   const header = request.headers.get("x-cron-secret");
   if (!header) return false;
-  return header === cronSecret;
+  // Constant-time compare, consistent with the oauth state HMAC check.
+  const received = Buffer.from(header);
+  const expected = Buffer.from(cronSecret);
+  if (received.length !== expected.length) return false;
+  return timingSafeEqual(received, expected);
 }
 
 export interface RefreshTokenResult {
