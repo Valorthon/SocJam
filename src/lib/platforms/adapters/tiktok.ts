@@ -145,7 +145,41 @@ function isRetryableFailReason(reason: string | undefined): boolean {
 
 function isAuthExpiredError(status: number, errorCode?: string): boolean {
   if (status === 401) return true;
-  return errorCode === "access_token_invalid" || errorCode === "scope_not_authorized";
+  return (
+    errorCode === "access_token_invalid" ||
+    errorCode === "scope_not_authorized" ||
+    errorCode === "access_denied"
+  );
+}
+
+function selectPrivacyLevel(options: string[] | undefined): string {
+  if (!options || options.length === 0) return "SELF_ONLY";
+  if (options.includes("SELF_ONLY")) return "SELF_ONLY";
+  return options[0];
+}
+
+function logTikTokApiError(
+  endpoint: string,
+  status: number,
+  body: unknown,
+  errorCode?: string,
+): void {
+  const logId =
+    typeof body === "object" &&
+    body !== null &&
+    "error" in body &&
+    typeof (body as { error?: { log_id?: string } }).error === "object" &&
+    (body as { error?: { log_id?: string } }).error !== null
+      ? (body as { error?: { log_id?: string } }).error?.log_id
+      : undefined;
+
+  console.error("TikTok API error response.", {
+    endpoint,
+    status,
+    errorCode,
+    logId,
+    responseBody: body,
+  });
 }
 
 function tiktokApiErrorFromResponse(
@@ -153,12 +187,32 @@ function tiktokApiErrorFromResponse(
   errorCode: string | undefined,
   message: string | undefined,
 ): { message: string; authExpired: boolean; retryable: boolean } {
+  const authExpired = isAuthExpiredError(status, errorCode);
+
+  if (authExpired) {
+    return {
+      message:
+        "Your TikTok connection is no longer authorized. Reconnect your account and make sure the video.publish permission is granted.",
+      authExpired: true,
+      retryable: false,
+    };
+  }
+
+  if (status === 403) {
+    return {
+      message:
+        message?.trim() ||
+        "TikTok rejected the publish request. Check that your app has Direct Post approval and the account can publish videos.",
+      authExpired: false,
+      retryable: false,
+    };
+  }
+
   const description = message?.trim()
     ? message
     : `TikTok API returned ${status}.`;
-  const authExpired = isAuthExpiredError(status, errorCode);
   const retryable =
-    !authExpired && (status >= 500 || status === 429 || errorCode === "internal");
+    status >= 500 || status === 429 || errorCode === "internal";
   return { message: description, authExpired, retryable };
 }
 
@@ -253,11 +307,25 @@ export class TikTokAdapter implements SocialPlatformAdapter {
     const account = await this.ensureFreshToken(input.account);
     const accessToken = this.dependencies.decryptToken(account.accessToken);
 
+    let privacyLevel: string;
+    try {
+      const creatorInfo =
+        await this.dependencies.fetchCreatorInfo(accessToken);
+      privacyLevel = selectPrivacyLevel(creatorInfo.privacy_level_options);
+    } catch (error) {
+      console.error("TikTok creator info fetch failed during publish.", {
+        targetId: input.targetId,
+        error,
+      });
+      privacyLevel = "SELF_ONLY";
+    }
+
     try {
       const { publishId, uploadUrl } = await this.initializeVideoUpload({
         accessToken,
         title: input.text,
         videoSize: loaded.bytes.length,
+        privacyLevel,
       });
 
       await this.uploadVideoFile(uploadUrl, loaded.bytes, loaded.mimeType);
@@ -287,8 +355,11 @@ export class TikTokAdapter implements SocialPlatformAdapter {
       console.error("TikTok publish failed.", { targetId: input.targetId, error });
       const message = error instanceof Error ? error.message : "Unable to publish to TikTok.";
       const authExpired =
-        message.toLowerCase().includes("unauthorized") || message.includes("401");
-      const retryable = !authExpired && !message.toLowerCase().includes("validation");
+        (error as Error & { authExpired?: boolean }).authExpired ??
+        (message.toLowerCase().includes("unauthorized") || message.includes("401"));
+      const retryable =
+        (error as Error & { retryable?: boolean }).retryable ??
+        (!authExpired && !message.toLowerCase().includes("validation"));
       return publishResultSchema.parse({
         ok: false,
         error: message,
@@ -391,6 +462,7 @@ export class TikTokAdapter implements SocialPlatformAdapter {
     accessToken: string;
     title: string;
     videoSize: number;
+    privacyLevel: string;
   }): Promise<{ publishId: string; uploadUrl: string }> {
     const chunkSize = input.videoSize;
     const totalChunkCount = 1;
@@ -404,7 +476,7 @@ export class TikTokAdapter implements SocialPlatformAdapter {
       body: JSON.stringify({
         post_info: {
           title: input.title,
-          privacy_level: "SELF_ONLY",
+          privacy_level: input.privacyLevel,
         },
         source_info: {
           source: "FILE_UPLOAD",
@@ -422,6 +494,7 @@ export class TikTokAdapter implements SocialPlatformAdapter {
       const message = parsed.success
         ? parsed.data.error.message
         : `TikTok video init failed: ${response.status}`;
+      logTikTokApiError("POST /v2/post/publish/video/init/", response.status, data, errorCode);
       const { message: safeMessage, authExpired, retryable } = tiktokApiErrorFromResponse(
         response.status,
         errorCode,
@@ -460,6 +533,12 @@ export class TikTokAdapter implements SocialPlatformAdapter {
     });
 
     if (!response.ok) {
+      const errorBody = await response.text().catch(() => null);
+      console.error("TikTok video upload failed.", {
+        status: response.status,
+        statusText: response.statusText,
+        responseBody: errorBody,
+      });
       throw new Error(`TikTok video upload failed: ${response.status}`);
     }
   }
@@ -487,6 +566,7 @@ export class TikTokAdapter implements SocialPlatformAdapter {
         const message = parsed.success
           ? parsed.data.error.message
           : `TikTok status fetch failed: ${response.status}`;
+        logTikTokApiError("POST /v2/post/publish/status/fetch/", response.status, data, errorCode);
         const { message: safeMessage, authExpired, retryable } = tiktokApiErrorFromResponse(
           response.status,
           errorCode,

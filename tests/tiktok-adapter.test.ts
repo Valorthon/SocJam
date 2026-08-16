@@ -116,6 +116,23 @@ async function run(): Promise<void> {
       );
     }
 
+    if (request.url.includes("/v2/post/publish/creator_info/query/")) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            creator_username: "testcreator",
+            privacy_level_options: ["SELF_ONLY", "FRIENDS", "PUBLIC"],
+          },
+          error: {
+            code: "ok",
+            message: "",
+            log_id: "202210112248442CB9319E1FB30C1073F3",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
     return new Response("Not found", { status: 404 });
   };
 
@@ -327,6 +344,118 @@ async function run(): Promise<void> {
     assert.equal(retryableResult.ok, false);
     if (!retryableResult.ok) {
       assert.equal(retryableResult.retryable, true);
+    }
+
+    // Creator info without SELF_ONLY falls back to the first allowed option.
+    const noSelfOnlyAdapter = new TikTokAdapter({
+      uploadDir,
+      pollIntervalMs: 10,
+      fetchCreatorInfo: async () => ({
+        creator_username: "testcreator",
+        privacy_level_options: ["PUBLIC", "FRIENDS"],
+      }),
+      fetch: async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const request = new Request(input, init);
+        requests.push(request);
+
+        if (request.url.includes("/v2/post/publish/creator_info/query/")) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                creator_username: "testcreator",
+                privacy_level_options: ["PUBLIC", "FRIENDS"],
+              },
+              error: {
+                code: "ok",
+                message: "",
+                log_id: "202210112248442CB9319E1FB30C1073F3",
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+
+        if (request.url.includes("/v2/post/publish/video/init/")) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                publish_id: "v_pub_file~v2-public",
+                upload_url: "https://open-upload.tiktokapis.com/video/?upload_id=public",
+              },
+              error: {
+                code: "ok",
+                message: "",
+                log_id: "202210112248442CB9319E1FB30C1073F3",
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+
+        if (request.url.includes("open-upload.tiktokapis.com")) {
+          return new Response(null, { status: 200 });
+        }
+
+        if (request.url.includes("/v2/post/publish/status/fetch/")) {
+          return new Response(
+            JSON.stringify({
+              data: { status: "PUBLISH_COMPLETE" },
+              error: {
+                code: "ok",
+                message: "",
+                log_id: "202210112248442CB9319E1FB30C1073F3",
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+
+        return new Response("Not found", { status: 404 });
+      },
+    });
+
+    const noSelfOnlyResult = await noSelfOnlyAdapter.publishPost(
+      createInput({ targetId: "target-public", media: [video] }),
+    );
+    assert.equal(noSelfOnlyResult.ok, true);
+
+    const noSelfOnlyInitRequests = requests.filter((request) =>
+      request.url.includes("/v2/post/publish/video/init/"),
+    );
+    const noSelfOnlyInitRequest = noSelfOnlyInitRequests.at(-1);
+    assert.ok(noSelfOnlyInitRequest);
+    const noSelfOnlyInitBody = await noSelfOnlyInitRequest?.json();
+    assert.equal(noSelfOnlyInitBody.post_info.privacy_level, "PUBLIC");
+
+    // 403 from video init is surfaced as non-retryable and not auth-expired.
+    const forbiddenAdapter = new TikTokAdapter({
+      uploadDir,
+      fetchCreatorInfo: async () => ({
+        creator_username: "testcreator",
+        privacy_level_options: ["SELF_ONLY", "PUBLIC"],
+      }),
+      fetch: async (): Promise<Response> =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "authorization_error",
+              message: "App permission denied",
+              log_id: "202210112248442CB9319E1FB30C1073F3",
+            },
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        ),
+    });
+
+    const forbiddenConsoleError = console.error;
+    console.error = () => undefined;
+    const forbiddenResult = await forbiddenAdapter.publishPost(createInput({ media: [video] }));
+    console.error = forbiddenConsoleError;
+    assert.equal(forbiddenResult.ok, false);
+    if (!forbiddenResult.ok) {
+      assert.equal(forbiddenResult.authExpired, false);
+      assert.equal(forbiddenResult.retryable, false);
+      assert.ok(forbiddenResult.error.length > 0);
     }
   } finally {
     global.fetch = originalFetch;
