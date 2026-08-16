@@ -3,6 +3,8 @@ import { type Platform } from "@prisma/client";
 import {
   createRefreshTokensRunner,
   isCronRefreshAuthorized,
+  META_REFRESH_PLATFORMS,
+  metaRefreshAccountsWhere,
   type RefreshTokensDependencies,
 } from "../src/app/api/cron/refresh-tokens/route";
 
@@ -188,6 +190,20 @@ async function run(): Promise<void> {
       assert.ok(error instanceof Error);
       assert.ok(error.message.includes("Meta OAuth configuration"));
     }
+
+    // --- Production query never selects non-Meta accounts.
+    assert.deepEqual(META_REFRESH_PLATFORMS, ["FACEBOOK", "INSTAGRAM"]);
+    const where = metaRefreshAccountsWhere(new Date("2026-01-01T00:00:00Z"));
+    assert.deepEqual(where.platform.in, ["FACEBOOK", "INSTAGRAM"]);
+    for (const nonMeta of ["LINKEDIN", "TIKTOK", "X"] as Platform[]) {
+      assert.equal(
+        (where.platform.in as Platform[]).includes(nonMeta),
+        false,
+        `${nonMeta} must never be selected by the refresh-tokens cron`,
+      );
+    }
+    assert.equal(where.refreshToken.not, null);
+    assert.equal(where.status, "ACTIVE");
 
     console.log("Refresh-tokens tests passed.");
   } finally {

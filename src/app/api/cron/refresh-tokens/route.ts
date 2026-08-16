@@ -115,14 +115,27 @@ export function createRefreshTokensRunner(dependencies: RefreshTokensDependencie
   };
 }
 
+/**
+ * Meta platforms whose long-lived user tokens are refreshable via
+ * fb_exchange_token. Non-Meta accounts (LinkedIn, TikTok) must never be
+ * selected — their refresh tokens would be sent to Meta's endpoint, the
+ * exchange would fail, and they'd be wrongly flipped to RECONNECT_REQUIRED.
+ */
+export const META_REFRESH_PLATFORMS: Platform[] = ["FACEBOOK", "INSTAGRAM"];
+
+export function metaRefreshAccountsWhere(now: Date = new Date()) {
+  return {
+    platform: { in: META_REFRESH_PLATFORMS },
+    refreshToken: { not: null },
+    expiresAt: { lte: new Date(now.getTime() + REFRESH_WINDOW_MS) },
+    status: "ACTIVE" as const,
+  };
+}
+
 const productionRunner = createRefreshTokensRunner({
   findAccounts: async () =>
     db.socialAccount.findMany({
-      where: {
-        refreshToken: { not: null },
-        expiresAt: { lte: new Date(Date.now() + REFRESH_WINDOW_MS) },
-        status: "ACTIVE",
-      },
+      where: metaRefreshAccountsWhere(),
       select: {
         id: true,
         platform: true,

@@ -201,6 +201,18 @@ export class RealFacebookAdapter implements SocialPlatformAdapter {
 
     const images = input.media.filter((asset) => asset.type === "IMAGE");
 
+    // Phase scope is text + images only. A post that carries media but no
+    // images (e.g. video-only) must fail loudly — silently dropping the
+    // media and publishing text would mislead the user.
+    if (input.media.length > 0 && images.length === 0) {
+      return publishResultSchema.parse({
+        ok: false,
+        error:
+          "Facebook publishing supports text and images only in this phase. Remove the video media and try again.",
+        retryable: false,
+      });
+    }
+
     try {
       if (images.length === 0) {
         return await this.publishTextPost(pageIdValue, token, input.text);

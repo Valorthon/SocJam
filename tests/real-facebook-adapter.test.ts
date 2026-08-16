@@ -143,6 +143,41 @@ async function run(): Promise<void> {
   }
   restore429();
 
+  // --- Video-only media → explicit rejection, never a silent text-only post ---
+  {
+    let graphCalls = 0;
+    const restoreVideo = installFetch(async () => {
+      graphCalls += 1;
+      return jsonResponse(200, { id: `${PAGE_ID}_post_video` });
+    });
+    const videoAdapter = new RealFacebookAdapter();
+    const videoResult = await videoAdapter.publishPost(
+      input({
+        media: [
+          {
+            id: "video-1",
+            postId: "post-1",
+            url: "https://example.com/video.mp4",
+            type: "VIDEO",
+            mimeType: "video/mp4",
+            sizeBytes: 1024 * 1024,
+            width: null,
+            height: null,
+            order: 0,
+          },
+        ],
+      }),
+    );
+    assert.equal(videoResult.ok, false, "video-only media must be rejected");
+    if (!videoResult.ok) {
+      assert.equal(videoResult.retryable, false);
+      assert.ok(!videoResult.authExpired);
+      assert.ok(videoResult.error.includes("images only"));
+    }
+    assert.equal(graphCalls, 0, "no Graph call should be made for rejected media");
+    restoreVideo();
+  }
+
   // --- Sanitization: provider error body never leaks ---
   const restoreLeak = installFetch(async () =>
     jsonResponse(400, {
