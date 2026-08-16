@@ -196,8 +196,17 @@ export class RealFacebookAdapter implements SocialPlatformAdapter {
       });
     }
 
-    // Touch config so misconfiguration surfaces rather than silent failures.
-    this.deps.loadMetaConfig();
+    // Touch config so misconfiguration surfaces rather than silent failures —
+    // as a sanitized result instead of an unhandled throw mid-publish.
+    try {
+      this.deps.loadMetaConfig();
+    } catch {
+      return publishResultSchema.parse({
+        ok: false,
+        error: "Facebook publishing is not configured on the server.",
+        retryable: false,
+      });
+    }
 
     const images = input.media.filter((asset) => asset.type === "IMAGE");
 

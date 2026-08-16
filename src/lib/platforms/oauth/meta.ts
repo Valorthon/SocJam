@@ -88,10 +88,13 @@ export function loadMetaConfig(): MetaConfig {
 }
 
 export function isMetaConfigured(): boolean {
+  // Mirrors every env var loadMetaConfig() requires, so callers that gate on
+  // this predicate never fall through to a throwing loadMetaConfig().
   return Boolean(
     process.env.META_APP_ID &&
       process.env.META_APP_SECRET &&
       process.env.META_REDIRECT_URI &&
+      process.env.META_GRAPH_API_VERSION &&
       process.env.AUTH_SECRET,
   );
 }
@@ -383,16 +386,24 @@ export const metaOauthCookies = {
  * here vs. ~350 with a token).
  */
 export interface PageListCookiePayload {
-  metaUserId: string;
+  /** OmniPost app user id (not a Meta id) — binds the cookie to its user. */
+  appUserId: string;
   platform: "FACEBOOK" | "INSTAGRAM";
   userToken: string;
+  /**
+   * Meta-reported expiry for the long-lived user token, when known. Absent
+   * when Graph returned a token with no expires_in; finalize falls back to
+   * the documented ~60-day window in that case.
+   */
+  userTokenExpiresInSeconds?: number;
   pages: Array<{ id: string; name: string; hasInstagram: boolean }>;
 }
 
 const pageListCookiePayloadSchema = z.object({
-  metaUserId: z.string().min(1),
+  appUserId: z.string().min(1),
   platform: z.enum(["FACEBOOK", "INSTAGRAM"]),
   userToken: z.string().min(1),
+  userTokenExpiresInSeconds: z.number().int().positive().optional(),
   pages: z.array(
     z.object({
       id: z.string().min(1),

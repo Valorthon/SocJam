@@ -25,7 +25,13 @@ function metaAdapterFlag(platform: "FACEBOOK" | "INSTAGRAM"): string | undefined
   );
 }
 
-function isMetaConfigured(): boolean {
+/**
+ * Meta app credentials present. Gates auto-enablement of the real FB/IG
+ * adapters only — publishing works with stored Page tokens and doesn't need
+ * the OAuth redirect config. The connect flow itself uses the stricter
+ * isMetaConfigured() in oauth/meta.ts (all loadMetaConfig env vars).
+ */
+function hasMetaAppCredentials(): boolean {
   return Boolean(process.env.META_APP_ID && process.env.META_APP_SECRET);
 }
 
@@ -33,12 +39,12 @@ export function isFacebookRealEnabled(): boolean {
   const adapter = metaAdapterFlag("FACEBOOK");
   if (adapter === "real") return true;
   if (adapter === "mock") return false;
-  return isMetaConfigured();
+  return hasMetaAppCredentials();
 }
 
 export function isInstagramRealEnabled(): boolean {
   const adapter = metaAdapterFlag("INSTAGRAM");
   if (adapter === "real") return true;
   if (adapter === "mock") return false;
-  return isMetaConfigured();
+  return hasMetaAppCredentials();
 }

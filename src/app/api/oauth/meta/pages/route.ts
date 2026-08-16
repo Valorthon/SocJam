@@ -38,7 +38,7 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
-  if (cookie.metaUserId !== authentication.userId) {
+  if (cookie.appUserId !== authentication.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

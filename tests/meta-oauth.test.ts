@@ -67,9 +67,10 @@ async function run(): Promise<void> {
 
   // --- Page-list cookie encode/decode round trip ---
   const payload: PageListCookiePayload = {
-    metaUserId: "user-1",
+    appUserId: "user-1",
     platform: "FACEBOOK",
     userToken: "long-lived-user-token-abc123",
+    userTokenExpiresInSeconds: 60 * 24 * 60 * 60,
     pages: [
       { id: "page-1", name: "Acme Page with spaces & symbols", hasInstagram: false },
       { id: "page-2", name: "Café — Accénted", hasInstagram: true },

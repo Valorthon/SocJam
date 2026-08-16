@@ -59,6 +59,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   // Exchange the short-lived code for a short-lived token, then upgrade to a
   // long-lived (60-day) user token.
   let longLivedUserToken: string;
+  let userTokenExpiresInSeconds: number | null = null;
   try {
     const shortLived = await exchangeCodeForToken(
       config,
@@ -74,6 +75,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         shortLived.accessToken,
       );
       longLivedUserToken = longLived.accessToken;
+      userTokenExpiresInSeconds = longLived.expiresInSeconds;
     }
   } catch {
     return denyRoute("token_exchange_failed");
@@ -97,9 +99,10 @@ export async function GET(request: Request): Promise<NextResponse> {
   // with spaces/braces break RFC 6265, so we base64url-encode the payload
   // (same safe alphabet the state cookie uses).
   const cookiePayload = {
-    metaUserId: state.userId,
+    appUserId: state.userId,
     platform: state.platform,
     userToken: longLivedUserToken,
+    ...(userTokenExpiresInSeconds !== null ? { userTokenExpiresInSeconds } : {}),
     pages: pages.map((page) => ({
       id: page.id,
       name: page.name,

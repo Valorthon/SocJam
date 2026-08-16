@@ -52,7 +52,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  if (cookie.metaUserId !== authentication.userId) {
+  if (cookie.appUserId !== authentication.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -137,8 +137,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  // Prefer Meta's reported expiry for the long-lived user token; the 60-day
+  // window is only a fallback for tokens Graph returned without expires_in.
   const tokenExpiresAt = new Date(
-    Date.now() + 60 * DAY_SECONDS * 1000,
+    Date.now() +
+      (cookie.userTokenExpiresInSeconds ?? 60 * DAY_SECONDS) * 1000,
   );
 
   const scopes = [
