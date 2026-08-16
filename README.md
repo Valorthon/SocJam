@@ -2,7 +2,7 @@
 
 One workspace to draft, adapt, schedule, and publish to every social platform — without rewriting the same post five times.
 
-**[Live demo](https://socjam.up.railway.app)**
+**Live app deployment:  [https://socjam.up.railway.app](https://socjam.up.railway.app)**
 
 Built in 72 hours by a 3-person team at a hackathon.
 
@@ -33,7 +33,7 @@ SocJam is a centralized social media control hub. You draft once, AI adapts the 
 | **Facebook & Instagram** | Real integration, running in sandbox while awaiting production review |
 | **X** | Stubbed due to the X API paywall; mock adapter available for testing |
 
-Production approval for TikTok, Facebook, and Instagram typically takes days to weeks. In the meantime, the integrations are demoed in sandbox mode in the Devpost video.
+The app is already under review by Facebook, Insta, and Tiktok so it can be used it prod. However, production approval for TikTok, Facebook, and Instagram typically takes days to weeks which is way passed the time frame of the hackathon. In the meantime, the integrations are demoed in sandbox mode. The integrations are *real* it's just that they are restricted to users outside the dev team.
 
 All platforms can also run behind deterministic mock adapters via `MOCK_PLATFORMS=true` for local development and testing.
 
