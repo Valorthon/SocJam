@@ -10,9 +10,10 @@ import {
   PLATFORMS,
   type Platform,
 } from "@/lib/platforms/constraints";
-import { isLinkedInRealEnabled } from "@/lib/platforms/config";
+import { isLinkedInRealEnabled, isTikTokRealEnabled } from "@/lib/platforms/config";
 
 const LINKEDIN_OAUTH_URL = "/api/accounts/oauth/linkedin";
+const TIKTOK_OAUTH_URL = "/api/accounts/oauth/tiktok";
 
 export function OnboardingAccountList() {
   const router = useRouter();
@@ -21,6 +22,11 @@ export function OnboardingAccountList() {
   function startConnect(platform: Platform) {
     if (platform === "LINKEDIN" && isLinkedInRealEnabled()) {
       window.location.href = LINKEDIN_OAUTH_URL;
+      return;
+    }
+
+    if (platform === "TIKTOK" && isTikTokRealEnabled()) {
+      window.location.href = TIKTOK_OAUTH_URL;
       return;
     }
 
