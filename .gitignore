@@ -22,3 +22,6 @@
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Vercel CLI link state (project metadata only, never deploy from here)
+.vercel/
