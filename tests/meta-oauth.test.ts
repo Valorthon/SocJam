@@ -75,19 +75,41 @@ async function run(): Promise<void> {
       { id: "page-2", name: "Café — Accénted", hasInstagram: true },
     ],
   };
-  const encoded = encodePageListCookie(payload);
-  // base64url alphabet only — no spaces, braces, or quotes (cookie-safe).
-  assert.ok(/^[A-Za-z0-9_-]*$/.test(encoded), "cookie value must be base64url");
-  const cookieDecoded = decodePageListCookie(encoded);
+  const encoded = encodePageListCookie(payload, config.stateSecret);
+  // base64url alphabet + signature only — no spaces, braces, or quotes.
+  assert.ok(
+    /^[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*$/.test(encoded),
+    "cookie value must be a signed base64url envelope",
+  );
+  const cookieDecoded = decodePageListCookie(encoded, config.stateSecret);
   assert.deepEqual(cookieDecoded, payload);
 
+  // Signed with a different secret → null.
+  assert.equal(decodePageListCookie(encoded, "different-secret"), null);
+  // Tampered payload (signature no longer matches) → null.
+  const [encodedBody, encodedSig] = encoded.split(".");
+  const forgedPayload: PageListCookiePayload = { ...payload, userToken: "attacker-token" };
+  const forgedBody = Buffer.from(JSON.stringify(forgedPayload), "utf8").toString("base64url");
+  assert.equal(decodePageListCookie(`${forgedBody}.${encodedSig}`, config.stateSecret), null);
+  // Truncated/garbled signature → null.
+  assert.equal(
+    decodePageListCookie(`${encodedBody}.${encodedSig.slice(0, -2)}AB`, config.stateSecret),
+    null,
+  );
+
   // Tamper / garbage → null (no throw).
-  assert.equal(decodePageListCookie(""), null);
-  assert.equal(decodePageListCookie("not-valid-base64!"), null);
-  assert.equal(decodePageListCookie("aGVsbG8"), null); // valid base64 but not JSON
-  // Missing required field → null.
+  assert.equal(decodePageListCookie("", config.stateSecret), null);
+  assert.equal(decodePageListCookie("not-valid-base64!", config.stateSecret), null);
+  assert.equal(decodePageListCookie("aGVsbG8", config.stateSecret), null); // valid base64 but not JSON
+  // Missing required field → schema rejects even when correctly signed.
   const badPayload = { ...payload, userToken: "" };
-  assert.equal(decodePageListCookie(encodePageListCookie(badPayload as never)), null);
+  assert.equal(
+    decodePageListCookie(
+      encodePageListCookie(badPayload as never, config.stateSecret),
+      config.stateSecret,
+    ),
+    null,
+  );
 
   console.log("Meta OAuth test passed.");
 }

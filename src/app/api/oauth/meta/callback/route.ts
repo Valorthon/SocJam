@@ -17,7 +17,16 @@ function denyRoute(reason: string): NextResponse {
     process.env.AUTH_URL ?? "http://localhost:3000",
   );
   url.searchParams.set("oauth_error", reason);
-  return NextResponse.redirect(url, 302);
+  const response = NextResponse.redirect(url, 302);
+  // Consume the state cookie on failure paths too, so a failed/aborted
+  // attempt can't leave a stale state around for replay.
+  response.cookies.set(metaOauthCookies.state, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+  return response;
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
@@ -38,9 +47,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   if (!stateCookie) {
     return denyRoute("missing_state");
   }
-  if (stateCookie !== returnedState) {
-    return denyRoute("state_mismatch");
-  }
+  // No plain string pre-compare here: decodeState verifies the HMAC
+  // signature with a constant-time compare, which is the real CSRF gate.
 
   const config = loadMetaConfig();
   const state = decodeState(returnedState, config.stateSecret);
@@ -111,7 +119,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   // Set-Cookie header onto the outgoing 302 deterministically.
   response.cookies.set(
     metaOauthCookies.pageList,
-    encodePageListCookie(cookiePayload),
+    encodePageListCookie(cookiePayload, config.stateSecret),
     {
       httpOnly: true,
       sameSite: "lax",

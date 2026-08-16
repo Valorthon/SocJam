@@ -42,7 +42,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const cookie = decodePageListCookie(raw);
+  const config = loadMetaConfig();
+  // The page-list cookie is HMAC-signed; verify it against the state secret.
+  const cookie = decodePageListCookie(raw, config.stateSecret);
   if (!cookie) {
     return NextResponse.json(
       { error: "Your connect session expired. Please try again." },
@@ -65,7 +67,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   // The slim cookie doesn't carry per-Page access tokens — re-fetch /me/accounts
   // with the long-lived user token to pick up the chosen Page's access token
   // (and its instagram_business_account id for IG connect).
-  const config = loadMetaConfig();
   let pageAccessToken: string;
   let instagramBusinessAccountId: string | null;
   try {

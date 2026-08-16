@@ -372,14 +372,15 @@ export const metaOauthCookies = {
 /**
  * Intermediate page-list cookie payload.
  *
- * Stored base64url-encoded (RFC 4648 §5 safe alphabet for cookie values —
- * no spaces, quotes, or braces that break RFC 6265 cookie-octet rules) and
- * slimmed to only what the picker UI + finalize need. Per-Page access tokens
- * are NOT kept here — finalize re-fetches `listPages` with `userToken` to
- * grab the chosen Page's access token at finalize time. This keeps the cookie
- * well under the browser's ~4KB per-cookie limit even for accounts that
- * manage many Pages (each Page contributes only ~60 bytes here vs. ~350 with
- * a token).
+ * Stored as an HMAC-signed, base64url-encoded envelope (`body.signature`,
+ * same shape as the state cookie — signature verified with a constant-time
+ * compare before the payload is trusted) using the RFC 4648 §5 safe alphabet
+ * for cookie values. Slimmed to only what the picker UI + finalize need.
+ * Per-Page access tokens are NOT kept here — finalize re-fetches `listPages`
+ * with `userToken` to grab the chosen Page's access token at finalize time.
+ * This keeps the cookie well under the browser's ~4KB per-cookie limit even
+ * for accounts that manage many Pages (each Page contributes only ~60 bytes
+ * here vs. ~350 with a token).
  */
 export interface PageListCookiePayload {
   metaUserId: string;
@@ -401,14 +402,35 @@ const pageListCookiePayloadSchema = z.object({
   ),
 });
 
-export function encodePageListCookie(payload: PageListCookiePayload): string {
-  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+export function encodePageListCookie(
+  payload: PageListCookiePayload,
+  secret: string,
+): string {
+  const body = encodeBase64Url(JSON.stringify(payload));
+  return `${body}.${sign(body, secret)}`;
 }
 
-export function decodePageListCookie(raw: string): PageListCookiePayload | null {
+export function decodePageListCookie(
+  raw: string,
+  secret: string,
+): PageListCookiePayload | null {
   if (!raw || typeof raw !== "string") return null;
+  // HMAC-signed envelope (same shape as the state cookie): the signature is
+  // verified with a constant-time compare before the payload is trusted, so
+  // a tampered or forged cookie is rejected as an expired session.
+  const dot = raw.lastIndexOf(".");
+  if (dot <= 0) return null;
+  const body = raw.slice(0, dot);
+  const signature = raw.slice(dot + 1);
+
+  const expectedSignature = sign(body, secret);
+  const received = Buffer.from(signature);
+  const expected = Buffer.from(expectedSignature);
+  if (received.length !== expected.length) return null;
+  if (!timingSafeEqual(received, expected)) return null;
+
   try {
-    const json = Buffer.from(raw, "base64url").toString("utf8");
+    const json = decodeBase64Url(body);
     const parsed = pageListCookiePayloadSchema.safeParse(JSON.parse(json));
     return parsed.success ? parsed.data : null;
   } catch {

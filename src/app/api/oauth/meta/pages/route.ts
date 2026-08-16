@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import {
   decodePageListCookie,
+  loadMetaConfig,
   metaOauthCookies,
+  type PageListCookiePayload,
 } from "@/lib/platforms/oauth/meta";
 import { metaPageListResponseSchema } from "@/lib/validations/account";
 
@@ -22,7 +24,13 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
-  const cookie = decodePageListCookie(raw);
+  // The page-list cookie is HMAC-signed; verify it against the state secret.
+  let cookie: PageListCookiePayload | null;
+  try {
+    cookie = decodePageListCookie(raw, loadMetaConfig().stateSecret);
+  } catch {
+    cookie = null;
+  }
   if (!cookie) {
     return NextResponse.json(
       { error: "Your session expired. Please reconnect your Meta account." },
