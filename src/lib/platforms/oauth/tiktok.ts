@@ -1,4 +1,4 @@
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { z } from "zod";
 
 const TIKTOK_AUTHORIZE_URL = "https://www.tiktok.com/v2/auth/authorize/";
@@ -14,6 +14,14 @@ function base64url(buffer: Buffer): string {
 
 export function generateState(): string {
   return base64url(randomBytes(32));
+}
+
+export function generateCodeVerifier(): string {
+  return base64url(randomBytes(32));
+}
+
+export function deriveCodeChallenge(codeVerifier: string): string {
+  return base64url(createHash("sha256").update(codeVerifier).digest());
 }
 
 const tokenResponseSchema = z.object({
@@ -60,6 +68,7 @@ interface AuthorizationUrlInput {
   redirectUri: string;
   state: string;
   scopes?: string[];
+  codeChallenge?: string;
 }
 
 export function buildAuthorizationUrl(input: AuthorizationUrlInput): string {
@@ -72,6 +81,10 @@ export function buildAuthorizationUrl(input: AuthorizationUrlInput): string {
   );
   url.searchParams.set("redirect_uri", input.redirectUri);
   url.searchParams.set("state", input.state);
+  if (input.codeChallenge) {
+    url.searchParams.set("code_challenge", input.codeChallenge);
+    url.searchParams.set("code_challenge_method", "S256");
+  }
   return url.toString();
 }
 
@@ -80,6 +93,7 @@ interface ExchangeCodeInput {
   clientSecret: string;
   redirectUri: string;
   code: string;
+  codeVerifier?: string;
 }
 
 export async function exchangeCodeForToken(
@@ -92,6 +106,9 @@ export async function exchangeCodeForToken(
     grant_type: "authorization_code",
     redirect_uri: input.redirectUri,
   });
+  if (input.codeVerifier) {
+    body.set("code_verifier", input.codeVerifier);
+  }
 
   const response = await fetch(TIKTOK_TOKEN_URL, {
     method: "POST",

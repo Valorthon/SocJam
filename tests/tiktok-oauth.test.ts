@@ -1,21 +1,29 @@
 import assert from "node:assert/strict";
 import {
   buildAuthorizationUrl,
+  deriveCodeChallenge,
   exchangeCodeForToken,
   fetchCreatorInfo,
+  generateCodeVerifier,
   generateState,
   refreshAccessToken,
 } from "../src/lib/platforms/oauth/tiktok";
 
 async function run(): Promise<void> {
   const state = generateState();
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = deriveCodeChallenge(codeVerifier);
   assert.ok(state.length > 0);
+  assert.ok(codeVerifier.length > 0);
+  assert.ok(codeChallenge.length > 0);
+  assert.notEqual(state, codeVerifier);
 
   const url = new URL(
     buildAuthorizationUrl({
       clientKey: "client-key-123",
       redirectUri: "http://localhost:3000/api/accounts/oauth/tiktok/callback",
       state,
+      codeChallenge,
     }),
   );
 
@@ -29,6 +37,8 @@ async function run(): Promise<void> {
   );
   assert.equal(url.searchParams.get("state"), state);
   assert.equal(url.searchParams.get("scope"), "video.publish");
+  assert.equal(url.searchParams.get("code_challenge"), codeChallenge);
+  assert.equal(url.searchParams.get("code_challenge_method"), "S256");
 
   const requests: Request[] = [];
   const originalFetch = global.fetch;
@@ -83,6 +93,7 @@ async function run(): Promise<void> {
       clientSecret: "secret-123",
       redirectUri: "http://localhost:3000/api/accounts/oauth/tiktok/callback",
       code: "code-123",
+      codeVerifier,
     });
 
     assert.equal(token.access_token, "access-123");
@@ -100,6 +111,7 @@ async function run(): Promise<void> {
     assert.ok(tokenBody?.includes("grant_type=authorization_code"));
     assert.ok(tokenBody?.includes("client_key=client-key-123"));
     assert.ok(tokenBody?.includes("redirect_uri="));
+    assert.ok(tokenBody?.includes("code_verifier=" + codeVerifier));
 
     const creatorInfo = await fetchCreatorInfo("access-123");
     assert.equal(creatorInfo.creator_username, "testcreator");

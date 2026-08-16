@@ -23,13 +23,14 @@ const callbackParamsSchema = z.object({
 
 interface OAuthCookie {
   state: string;
+  codeVerifier: string;
 }
 
 function parseCookie(value: string | undefined): OAuthCookie | null {
   if (!value) return null;
   try {
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
-    if (typeof parsed.state === "string") {
+    if (typeof parsed.state === "string" && typeof parsed.codeVerifier === "string") {
       return parsed;
     }
     return null;
@@ -91,6 +92,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       clientSecret,
       redirectUri,
       code: params.code,
+      codeVerifier: cookie.codeVerifier,
     });
 
     const creatorInfo = await fetchCreatorInfo(token.access_token);

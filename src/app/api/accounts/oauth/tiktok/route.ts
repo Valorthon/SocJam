@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   buildAuthorizationUrl,
+  deriveCodeChallenge,
+  generateCodeVerifier,
   generateState,
   sanitizeOAuthEnvValue,
 } from "@/lib/platforms/oauth/tiktok";
@@ -11,6 +13,7 @@ const COOKIE_MAX_AGE_SECONDS = 5 * 60;
 
 interface OAuthCookie {
   state: string;
+  codeVerifier: string;
 }
 
 function serializeCookie(value: OAuthCookie): string {
@@ -32,11 +35,13 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   const state = generateState();
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = deriveCodeChallenge(codeVerifier);
 
   const cookieStore = await cookies();
   cookieStore.set({
     name: COOKIE_NAME,
-    value: serializeCookie({ state }),
+    value: serializeCookie({ state, codeVerifier }),
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -49,6 +54,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     clientKey,
     redirectUri,
     state,
+    codeChallenge,
   });
 
   return NextResponse.redirect(authorizationUrl);

@@ -312,6 +312,7 @@ export class TikTokAdapter implements SocialPlatformAdapter {
 
   async connectFromCode(
     code: string,
+    codeVerifier?: string,
   ): Promise<{
     accessToken: string;
     refreshToken?: string;
@@ -325,6 +326,7 @@ export class TikTokAdapter implements SocialPlatformAdapter {
       clientSecret: this.dependencies.clientSecret,
       redirectUri: this.dependencies.redirectUri,
       code,
+      codeVerifier,
     });
 
     const creatorInfo = await this.dependencies.fetchCreatorInfo(token.access_token);
