@@ -52,7 +52,7 @@ function input(overrides: Partial<PublishInput> = {}): PublishInput {
   return {
     targetId: "target-1",
     idempotencyKey: "123e4567-e89b-12d3-a456-426614174000",
-    text: "Hello from OmniPost",
+    text: "Hello from SocJam",
     media: [],
     account: setActiveAccount(),
     ...overrides,
@@ -88,7 +88,7 @@ async function run(): Promise<void> {
   assert.ok(capturedUrl, "publish made an HTTP call");
   const url = capturedUrl as URL;
   assert.equal(url.pathname, `/v19.0/${PAGE_ID}/feed`);
-  assert.equal(url.searchParams.get("message"), "Hello from OmniPost");
+  assert.equal(url.searchParams.get("message"), "Hello from SocJam");
   assert.equal(url.searchParams.get("access_token"), PLAINTEXT_TOKEN);
   assert.equal((capturedInit as RequestInit | null)?.method, "POST");
   restore();
@@ -202,7 +202,7 @@ async function run(): Promise<void> {
     assert.ok(capturedUrl, "photos request made");
     assert.equal((capturedUrl as URL).pathname, `/v19.0/${PAGE_ID}/photos`);
     assert.equal((capturedUrl as URL).searchParams.get("url"), "https://omnipost.public.blob.vercel-storage.com/p.png");
-    assert.equal((capturedUrl as URL).searchParams.get("caption"), "Hello from OmniPost");
+    assert.equal((capturedUrl as URL).searchParams.get("caption"), "Hello from SocJam");
     assert.equal((capturedUrl as URL).searchParams.get("access_token"), PLAINTEXT_TOKEN);
     restorePhoto();
   }
@@ -241,7 +241,7 @@ async function run(): Promise<void> {
     assert.equal(photoCalled, 3, "one unpublished photo per carousel item");
     assert.ok(feedCaptured, "feed call with attached_media made");
     const feed = feedCaptured as URL;
-    assert.equal(feed.searchParams.get("message"), "Hello from OmniPost");
+    assert.equal(feed.searchParams.get("message"), "Hello from SocJam");
     assert.equal(feed.searchParams.get("attached_media[0]"), JSON.stringify({ media_fbid: "fbid_1" }));
     assert.equal(feed.searchParams.get("attached_media[1]"), JSON.stringify({ media_fbid: "fbid_2" }));
     assert.equal(feed.searchParams.get("attached_media[2]"), JSON.stringify({ media_fbid: "fbid_3" }));

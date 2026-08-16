@@ -33,7 +33,7 @@ http://localhost:3000/api/oauth/meta/callback
 
 (The same in `.env` as `META_REDIRECT_URI`.)
 
-For production, you'll also add `https://your-domain.com/api/oauth/meta/callback`. **Both URIs can live alongside each other** — the value in `META_REDIRECT_URI` is the one OmniPost actually requests.
+For production, you'll also add `https://your-domain.com/api/oauth/meta/callback`. **Both URIs can live alongside each other** — the value in `META_REDIRECT_URI` is the one SocJam actually requests.
 
 ## 3. Configure token encryption (shared with LinkedIn)
 
@@ -60,7 +60,7 @@ FACEBOOK_ADAPTER="real"
 INSTAGRAM_ADAPTER="real"
 ```
 
-Or omit those lines and let OmniPost **auto-detect**: if `META_APP_ID` + `META_APP_SECRET` are both set, `isFacebookRealEnabled()` and `isInstagramRealEnabled()` return `true`. Explicit `"mock"` overrides auto-detect.
+Or omit those lines and let SocJam **auto-detect**: if `META_APP_ID` + `META_APP_SECRET` are both set, `isFacebookRealEnabled()` and `isInstagramRealEnabled()` return `true`. Explicit `"mock"` overrides auto-detect.
 
 `INSTAGRAM_ADAPTER="real"` makes the accounts page route Instagram connect through the real Meta OAuth flow (same handshake as Facebook) **and** routes publishing through `RealInstagramAdapter` (the two-step container flow). Real Instagram publishing additionally requires `BLOB_READ_WRITE_TOKEN` so the media URL is publicly fetchable by Meta. Leave `INSTAGRAM_ADAPTER="mock"` to keep both connect and publish on the mock (e.g. for local dev without a Blob store).
 
@@ -84,7 +84,7 @@ Then:
 
 ## 6. Token refresh (defense-in-depth)
 
-Meta **long-lived user access tokens** expire after ~60 days. OmniPost refreshes them in two places:
+Meta **long-lived user access tokens** expire after ~60 days. SocJam refreshes them in two places:
 
 1. **Opportunistic refresh in `checkAuth`.** `RealFacebookAdapter.checkAuth()` calls `ensureFreshToken(account)` — if the user token is within 5 minutes of expiry and a `refreshToken` is present, it exchanges it for a fresh long-lived token, re-encrypts it, persists the new token, and returns the updated `account` through `AuthCheckResult.account`. This mirrors the LinkedIn adapter's behavior and means publish-time refresh happens transparently. The publisher already consumes `auth.account ?? target.account`.
 
@@ -222,7 +222,7 @@ Note: the opportunistic refresh in `RealFacebookAdapter.checkAuth()` will also r
 
 Two ways to verify this unhappy path locally:
 
-1. **Revoke the token in Meta.** Go to <https://www.facebook.com/settings?tab=applications> → your OmniPost app → Remove. Back in OmniPost, publish a post targeting that FB account. `checkAuth` returns `active: false`; the publisher marks the `PostTarget` `FAILED` with the CTA message and flips `SocialAccount.status` to `RECONNECT_REQUIRED`. The account row in `/settings/accounts` now shows the amber "Reconnect required" pill, and the composer disables it for selection.
+1. **Revoke the token in Meta.** Go to <https://www.facebook.com/settings?tab=applications> → your SocJam app → Remove. Back in SocJam, publish a post targeting that FB account. `checkAuth` returns `active: false`; the publisher marks the `PostTarget` `FAILED` with the CTA message and flips `SocialAccount.status` to `RECONNECT_REQUIRED`. The account row in `/settings/accounts` now shows the amber "Reconnect required" pill, and the composer disables it for selection.
 2. **Corrupt the encrypted token.** Pick a real-FB row in `pnpm prisma studio` and append garbage to its `accessToken` (e.g. `enc:...XX`). Publishing that target returns `authExpired: true, retryable: false`; the account flips to `RECONNECT_REQUIRED` without ever calling the Graph API. Reconnecting through the **Reconnect** button re-runs OAuth and overwrites the bad value, restoring `ACTIVE` status.
 
 ### 8.7 Token encryption at rest (verification)
@@ -237,7 +237,7 @@ Main's `tests/token-crypto.test.ts` covers the crypto module's round trips. To v
 
 Instagram's Graph API requires **every post to include a publicly-fetchable image URL**. Meta's servers fetch that URL; it cannot be local-only (so your browser can reach `localhost:3000/api/uploads/x.jpg`, but Meta's crawler cannot).
 
-To satisfy that requirement OmniPost added a public MediaStorage backend alongside the existing local-disk one:
+To satisfy that requirement SocJam added a public MediaStorage backend alongside the existing local-disk one:
 
 - **`BLOB_READ_WRITE_TOKEN`** — when set, `getMediaStorage()` (`src/lib/storage/index.ts`) returns `VercelBlobMediaStorage`; uploads persist to a public Vercel Blob store and `MediaAsset.url` becomes the fetchable Blob URL. When unset, the local-disk impl remains in effect for dev and non-IG flows.
 - The upload route (`src/lib/uploads/route-handlers.ts`) prefers `saved.publicUrl` when the storage provides it, falling back to the auth-gated `/api/uploads/{fileName}` local URL.

@@ -90,7 +90,7 @@ export default function PickPagePage() {
         </p>
         <h2 className="mt-1 text-2xl font-semibold tracking-tight">Pick a Page</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Select which Facebook Page OmniPost should publish to{". "}
+          Select which Facebook Page SocJam should publish to{". "}
           {pages.some((page) => page.hasInstagram)
             ? "Pages with an Instagram business account will also publish to that Instagram account."
             : ""}
