@@ -21,7 +21,6 @@ import {
   PLATFORMS,
   type Platform,
 } from "@/lib/platforms/constraints";
-import { isTikTokRealEnabled } from "@/lib/platforms/config";
 import { toast } from "sonner";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -122,13 +121,12 @@ function ConnectedAccountsPageInner() {
   }, [searchParams, router]);
 
   function startPlatformConnect(platform: Platform) {
-    if (platform === "LINKEDIN" && modes?.[platform] === "real") {
-      window.location.href = LINKEDIN_OAUTH_URL;
-      return;
-    }
-
-if (platform === "TIKTOK" && isTikTokRealEnabled()) {
-      window.location.href = TIKTOK_OAUTH_URL;
+    if (
+      (platform === "TIKTOK" || platform === "LINKEDIN") &&
+      modes?.[platform] === "real"
+    ) {
+      window.location.href =
+        platform === "TIKTOK" ? TIKTOK_OAUTH_URL : LINKEDIN_OAUTH_URL;
       return;
     }
 

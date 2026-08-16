@@ -9,6 +9,7 @@ import { connectModeResponseSchema } from "@/lib/validations/account";
 export interface ConnectModeDependencies {
   getAuthenticatedUser: typeof getAuthenticatedUser;
   isLinkedInRealEnabled: () => boolean;
+  isTikTokRealEnabled: () => boolean;
   isFacebookRealEnabled: () => boolean;
   isInstagramRealEnabled: () => boolean;
 }
@@ -18,6 +19,7 @@ export function createConnectModeRouteHandlers(
 ) {
   const realPlatformResolvers: Partial<Record<Platform, () => boolean>> = {
     LINKEDIN: dependencies.isLinkedInRealEnabled,
+    TIKTOK: dependencies.isTikTokRealEnabled,
     FACEBOOK: dependencies.isFacebookRealEnabled,
     INSTAGRAM: dependencies.isInstagramRealEnabled,
   };

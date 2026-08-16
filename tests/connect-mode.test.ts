@@ -14,6 +14,7 @@ function makeDeps(overrides: Partial<ConnectModeDependencies> = {}): ConnectMode
   return {
     getAuthenticatedUser: authenticatedUser(),
     isLinkedInRealEnabled: () => false,
+    isTikTokRealEnabled: () => false,
     isFacebookRealEnabled: () => false,
     isInstagramRealEnabled: () => false,
     ...overrides,
@@ -66,6 +67,18 @@ async function run(): Promise<void> {
   };
   assert.equal(linkedinRealBody.modes.LINKEDIN, "real");
   assert.equal(linkedinRealBody.modes.FACEBOOK, "mock");
+
+  // --- TikTok real (resolved server-side; the client must never read
+  // non-NEXT_PUBLIC env to decide the connect target) ---
+  const tiktokRealHandlers = createConnectModeRouteHandlers(
+    makeDeps({ isTikTokRealEnabled: () => true }),
+  );
+  const tiktokRealResponse = await tiktokRealHandlers.GET();
+  const tiktokRealBody = (await tiktokRealResponse.json()) as {
+    modes: Record<string, string>;
+  };
+  assert.equal(tiktokRealBody.modes.TIKTOK, "real");
+  assert.equal(tiktokRealBody.modes.FACEBOOK, "mock");
 
   // --- Multiple platforms real at once ---
   const multiRealHandlers = createConnectModeRouteHandlers(

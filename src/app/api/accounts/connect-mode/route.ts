@@ -3,12 +3,14 @@ import {
   isFacebookRealEnabled,
   isInstagramRealEnabled,
   isLinkedInRealEnabled,
+  isTikTokRealEnabled,
 } from "@/lib/platforms/config";
 import { createConnectModeRouteHandlers } from "@/lib/accounts/connect-mode-handlers";
 
 const handlers = createConnectModeRouteHandlers({
   getAuthenticatedUser,
   isLinkedInRealEnabled,
+  isTikTokRealEnabled,
   isFacebookRealEnabled,
   isInstagramRealEnabled,
 });

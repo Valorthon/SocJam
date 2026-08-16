@@ -10,7 +10,6 @@ import {
   PLATFORMS,
   type Platform,
 } from "@/lib/platforms/constraints";
-import { isTikTokRealEnabled } from "@/lib/platforms/config";
 import { useConnectMode } from "@/lib/api";
 
 const LINKEDIN_OAUTH_URL = "/api/accounts/oauth/linkedin";
@@ -24,13 +23,12 @@ export function OnboardingAccountList() {
   const modes = connectModeQuery.data?.modes;
 
   function startConnect(platform: Platform) {
-    if (platform === "LINKEDIN" && modes?.[platform] === "real") {
-      window.location.href = LINKEDIN_OAUTH_URL;
-      return;
-    }
-
-if (platform === "TIKTOK" && isTikTokRealEnabled()) {
-      window.location.href = TIKTOK_OAUTH_URL;
+    if (
+      (platform === "TIKTOK" || platform === "LINKEDIN") &&
+      modes?.[platform] === "real"
+    ) {
+      window.location.href =
+        platform === "TIKTOK" ? TIKTOK_OAUTH_URL : LINKEDIN_OAUTH_URL;
       return;
     }
 
