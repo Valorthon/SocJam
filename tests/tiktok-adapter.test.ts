@@ -203,6 +203,97 @@ async function run(): Promise<void> {
       shares: 0,
     });
 
+    // --- Public Blob URL: loader fetches bytes over HTTP (production path) ---
+    {
+      const publicVideoUrl =
+        "https://omnipost.public.blob.vercel-storage.com/uploaded-video.mp4";
+      const publicVideo: MediaAsset = {
+        id: "media-blob",
+        postId: "post-1",
+        url: publicVideoUrl,
+        type: "VIDEO",
+        mimeType: "video/mp4",
+        sizeBytes: 1024,
+        width: null,
+        height: null,
+        order: 0,
+      };
+      const videoBytes = Buffer.from("fake-video-from-blob");
+      let mediaFetched = false;
+      let uploadedBody: Uint8Array | null = null;
+
+      const blobAdapter = new TikTokAdapter({
+        uploadDir,
+        pollIntervalMs: 10,
+        fetch: async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+          const request = new Request(input, init);
+          requests.push(request);
+
+          if (request.url === publicVideoUrl && request.method === "GET") {
+            mediaFetched = true;
+            return new Response(new Uint8Array(videoBytes), {
+              status: 200,
+              headers: { "content-type": "video/mp4" },
+            });
+          }
+
+          if (request.url.includes("/v2/post/publish/video/init/")) {
+            return new Response(
+              JSON.stringify({
+                data: {
+                  publish_id: "v_pub_file~v2-blob",
+                  upload_url: "https://open-upload.tiktokapis.com/video/?upload_id=blob",
+                },
+                error: { code: "ok", message: "", log_id: "blob-log" },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+
+          if (request.url.includes("open-upload.tiktokapis.com")) {
+            uploadedBody = new Uint8Array(await request.arrayBuffer());
+            return new Response(null, { status: 200 });
+          }
+
+          if (request.url.includes("/v2/post/publish/status/fetch/")) {
+            return new Response(
+              JSON.stringify({
+                data: { status: "PUBLISH_COMPLETE" },
+                error: { code: "ok", message: "", log_id: "blob-log" },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+
+          if (request.url.includes("/v2/post/publish/creator_info/query/")) {
+            return new Response(
+              JSON.stringify({
+                data: {
+                  creator_username: "testcreator",
+                  privacy_level_options: ["SELF_ONLY"],
+                },
+                error: { code: "ok", message: "", log_id: "blob-log" },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+
+          return new Response("Not found", { status: 404 });
+        },
+      });
+
+      const blobResult = await blobAdapter.publishPost(
+        createInput({ targetId: "target-blob", media: [publicVideo] }),
+      );
+      assert.equal(blobResult.ok, true, "publish via public Blob URL should succeed");
+      if (blobResult.ok) {
+        assert.equal(blobResult.publishedUrl, "https://www.tiktok.com/@testcreator");
+      }
+      assert.equal(mediaFetched, true, "shared loader must fetch the public URL over HTTP");
+      assert.ok(uploadedBody, "video bytes uploaded to TikTok");
+      assert.deepEqual(Buffer.from(uploadedBody!), videoBytes, "uploaded bytes match fetched bytes");
+    }
+
     // Missing video returns non-retryable error.
     const missingVideoResult = await adapter.publishPost(createInput());
     assert.equal(missingVideoResult.ok, false);
