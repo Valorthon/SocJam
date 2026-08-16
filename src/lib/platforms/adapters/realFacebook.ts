@@ -240,9 +240,19 @@ export class RealFacebookAdapter implements SocialPlatformAdapter {
   }
 
   private async postJson(url: URL): Promise<unknown> {
+    // Move every param (including access_token) out of the URL query and
+    // into a form-encoded POST body — Meta accepts this and it keeps the
+    // token and long captions out of proxy/access logs. It also avoids URL
+    // length limits for max-length (63k char) messages.
+    const body = new URLSearchParams(url.searchParams);
+    url.search = "";
     let response: Response;
     try {
-      response = await this.fetchFn(url, { method: "POST" });
+      response = await this.fetchFn(url, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body,
+      });
     } catch {
       throw new Error("fetch failed");
     }

@@ -87,9 +87,13 @@ async function run(): Promise<void> {
   }
   assert.ok(capturedUrl, "publish made an HTTP call");
   const url = capturedUrl as URL;
+  const postBody = new URLSearchParams(
+    String((capturedInit as RequestInit | null)?.body ?? ""),
+  );
   assert.equal(url.pathname, `/v19.0/${PAGE_ID}/feed`);
-  assert.equal(url.searchParams.get("message"), "Hello from SocJam");
-  assert.equal(url.searchParams.get("access_token"), PLAINTEXT_TOKEN);
+  assert.equal(postBody.get("message"), "Hello from SocJam");
+  assert.equal(postBody.get("access_token"), PLAINTEXT_TOKEN);
+  assert.equal(url.search, "", "POST params must not appear in the URL query");
   assert.equal((capturedInit as RequestInit | null)?.method, "POST");
   restore();
 
@@ -208,8 +212,10 @@ async function run(): Promise<void> {
   // --- Single image: POST /photos with url + caption ---
   {
     let capturedUrl: URL | null = null;
+    let capturedInit: RequestInit | null = null;
     const restorePhoto = installFetch(async (inputUrl, init) => {
       capturedUrl = new URL(String(inputUrl));
+      capturedInit = init ?? null;
       const method = (init?.method ?? "GET").toUpperCase();
       assert.equal(method, "POST");
       return jsonResponse(200, { id: "photo_1", post_id: `${PAGE_ID}_photo_post` });
@@ -235,10 +241,15 @@ async function run(): Promise<void> {
       assert.equal(photoResult.publishedUrl, `https://www.facebook.com/${PAGE_ID}_photo_post`);
     }
     assert.ok(capturedUrl, "photos request made");
-    assert.equal((capturedUrl as URL).pathname, `/v19.0/${PAGE_ID}/photos`);
-    assert.equal((capturedUrl as URL).searchParams.get("url"), "https://omnipost.public.blob.vercel-storage.com/p.png");
-    assert.equal((capturedUrl as URL).searchParams.get("caption"), "Hello from SocJam");
-    assert.equal((capturedUrl as URL).searchParams.get("access_token"), PLAINTEXT_TOKEN);
+    const photoUrl = capturedUrl as URL;
+    const photoBody = new URLSearchParams(
+      String((capturedInit as RequestInit | null)?.body ?? ""),
+    );
+    assert.equal(photoUrl.pathname, `/v19.0/${PAGE_ID}/photos`);
+    assert.equal(photoBody.get("url"), "https://omnipost.public.blob.vercel-storage.com/p.png");
+    assert.equal(photoBody.get("caption"), "Hello from SocJam");
+    assert.equal(photoBody.get("access_token"), PLAINTEXT_TOKEN);
+    assert.equal(photoUrl.search, "", "POST params must not appear in the URL query");
     restorePhoto();
   }
 
@@ -246,7 +257,7 @@ async function run(): Promise<void> {
   {
     const childIds = ["fbid_1", "fbid_2", "fbid_3"];
     let photoCalled = 0;
-    let feedCaptured: URL | null = null;
+    const feedCalls: Array<{ url: URL; body: URLSearchParams }> = [];
     const restoreCarousel = installFetch(async (inputUrl, init) => {
       const url = new URL(String(inputUrl));
       const method = (init?.method ?? "GET").toUpperCase();
@@ -256,7 +267,7 @@ async function run(): Promise<void> {
         return jsonResponse(200, { id });
       }
       if (url.pathname.endsWith(`/${PAGE_ID}/feed`)) {
-        feedCaptured = url;
+        feedCalls.push({ url, body: new URLSearchParams(String(init?.body ?? "")) });
         return jsonResponse(200, { id: `${PAGE_ID}_carousel_post` });
       }
       return jsonResponse(500, {});
@@ -274,12 +285,13 @@ async function run(): Promise<void> {
       assert.equal(carouselResult.publishedUrl, `https://www.facebook.com/${PAGE_ID}_carousel_post`);
     }
     assert.equal(photoCalled, 3, "one unpublished photo per carousel item");
-    assert.ok(feedCaptured, "feed call with attached_media made");
-    const feed = feedCaptured as URL;
-    assert.equal(feed.searchParams.get("message"), "Hello from SocJam");
-    assert.equal(feed.searchParams.get("attached_media[0]"), JSON.stringify({ media_fbid: "fbid_1" }));
-    assert.equal(feed.searchParams.get("attached_media[1]"), JSON.stringify({ media_fbid: "fbid_2" }));
-    assert.equal(feed.searchParams.get("attached_media[2]"), JSON.stringify({ media_fbid: "fbid_3" }));
+    assert.equal(feedCalls.length, 1, "feed call with attached_media made");
+    const { url: feed, body: feedParams } = feedCalls[0];
+    assert.equal(feed.search, "", "POST params must not appear in the URL query");
+    assert.equal(feedParams.get("message"), "Hello from SocJam");
+    assert.equal(feedParams.get("attached_media[0]"), JSON.stringify({ media_fbid: "fbid_1" }));
+    assert.equal(feedParams.get("attached_media[1]"), JSON.stringify({ media_fbid: "fbid_2" }));
+    assert.equal(feedParams.get("attached_media[2]"), JSON.stringify({ media_fbid: "fbid_3" }));
     restoreCarousel();
   }
 
