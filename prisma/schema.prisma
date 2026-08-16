@@ -109,6 +109,7 @@ model SocialAccount {
   targets        PostTarget[]
 
   @@unique([userId, platform, handle])
+  @@unique([userId, platform, platformUserId])
 }
 
 model Post {
