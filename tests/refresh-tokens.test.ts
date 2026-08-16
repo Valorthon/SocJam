@@ -6,7 +6,7 @@ import {
   META_REFRESH_PLATFORMS,
   metaRefreshAccountsWhere,
   type RefreshTokensDependencies,
-} from "../src/app/api/cron/refresh-tokens/route";
+} from "../src/lib/cron/refresh-tokens";
 
 const ORIGINAL_SECRET = process.env.CRON_SECRET;
 
