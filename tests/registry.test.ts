@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { getPlatformAdapter } from "../src/lib/platforms/registry";
 import { isFacebookRealEnabled, isInstagramRealEnabled } from "../src/lib/platforms/config";
+import { mockInstagramAdapter } from "../src/lib/platforms/adapters/mockInstagram";
+import { realInstagramAdapter } from "../src/lib/platforms/adapters/realInstagram";
 
 async function run(): Promise<void> {
   const originalFb = process.env.FACEBOOK_ADAPTER;
@@ -70,46 +72,19 @@ async function run(): Promise<void> {
     delete process.env.FACEBOOK_ADAPTER;
     assert.equal(isFacebookRealEnabled(), true);
 
-    // IG special-case: IG connect mode is "real" but getPlatformAdapter for IG
-    // always returns the mock (publish stays mock this phase).
+    // IG now routes to the real adapter when INSTAGRAM_ADAPTER=real (the
+    // publish path is exercised fully in realInstagramAdapter.test.ts; here
+    // we assert the registry branch picks the real instance over the mock).
+    process.env.MOCK_PLATFORMS = "true";
+    process.env.INSTAGRAM_ADAPTER = "mock";
+    const igMock = getPlatformAdapter("INSTAGRAM");
+    assert.equal(igMock, mockInstagramAdapter, "mock flag → mock IG instance");
+
     process.env.INSTAGRAM_ADAPTER = "real";
     assert.equal(isInstagramRealEnabled(), true);
-    process.env.MOCK_PLATFORMS = "true";
-    const igAdapter = getPlatformAdapter("INSTAGRAM");
-    const igResult = await igAdapter.publishPost({
-      targetId: "ig-registry-target",
-      idempotencyKey: "123e4567-e89b-12d3-a456-426614174000",
-      text: "hello",
-      media: [
-        {
-          id: "img-1",
-          postId: "post-1",
-          url: "https://local/img.jpg",
-          type: "IMAGE",
-          mimeType: "image/jpeg",
-          sizeBytes: 1024,
-          width: null,
-          height: null,
-          order: 0,
-        },
-      ],
-      account: {
-        id: "account-ig",
-        userId: "user-ig",
-        platform: "INSTAGRAM",
-        handle: "@mock",
-        accessToken: "mock-token",
-        refreshToken: null,
-        expiresAt: null,
-        scope: null,
-        platformUserId: null,
-        status: "ACTIVE",
-      },
-    });
-    assert.equal(igResult.ok, true);
-    if (igResult.ok) {
-      assert.ok(igResult.publishedUrl.startsWith("https://mock.instagram.local/post/"));
-    }
+    const igReal = getPlatformAdapter("INSTAGRAM");
+    assert.equal(igReal, realInstagramAdapter, "real flag → real IG instance");
+    assert.notEqual(igReal, igMock, "real adapter must not be the mock instance");
 
     console.log("Registry tests passed.");
   } finally {

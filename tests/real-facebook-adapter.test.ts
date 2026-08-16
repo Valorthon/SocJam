@@ -170,6 +170,84 @@ async function run(): Promise<void> {
   }
   restoreNet();
 
+  // --- Single image: POST /photos with url + caption ---
+  {
+    let capturedUrl: URL | null = null;
+    const restorePhoto = installFetch(async (inputUrl, init) => {
+      capturedUrl = new URL(String(inputUrl));
+      const method = (init?.method ?? "GET").toUpperCase();
+      assert.equal(method, "POST");
+      return jsonResponse(200, { id: "photo_1", post_id: `${PAGE_ID}_photo_post` });
+    });
+    const adapterPhoto = new RealFacebookAdapter();
+    const photoResult = await adapterPhoto.publishPost(input({
+      media: [
+        {
+          id: "m1",
+          postId: "post-1",
+          url: "https://omnipost.public.blob.vercel-storage.com/p.png",
+          type: "IMAGE",
+          mimeType: "image/png",
+          sizeBytes: 1024,
+          width: null,
+          height: null,
+          order: 0,
+        },
+      ],
+    }));
+    assert.equal(photoResult.ok, true);
+    if (photoResult.ok) {
+      assert.equal(photoResult.publishedUrl, `https://www.facebook.com/${PAGE_ID}_photo_post`);
+    }
+    assert.ok(capturedUrl, "photos request made");
+    assert.equal((capturedUrl as URL).pathname, `/v19.0/${PAGE_ID}/photos`);
+    assert.equal((capturedUrl as URL).searchParams.get("url"), "https://omnipost.public.blob.vercel-storage.com/p.png");
+    assert.equal((capturedUrl as URL).searchParams.get("caption"), "Hello from OmniPost");
+    assert.equal((capturedUrl as URL).searchParams.get("access_token"), PLAINTEXT_TOKEN);
+    restorePhoto();
+  }
+
+  // --- Carousel: 3 unpublished /photos then /feed with attached_media ---
+  {
+    const childIds = ["fbid_1", "fbid_2", "fbid_3"];
+    let photoCalled = 0;
+    let feedCaptured: URL | null = null;
+    const restoreCarousel = installFetch(async (inputUrl, init) => {
+      const url = new URL(String(inputUrl));
+      const method = (init?.method ?? "GET").toUpperCase();
+      assert.equal(method, "POST");
+      if (url.pathname.endsWith(`/${PAGE_ID}/photos`)) {
+        const id = childIds[photoCalled++];
+        return jsonResponse(200, { id });
+      }
+      if (url.pathname.endsWith(`/${PAGE_ID}/feed`)) {
+        feedCaptured = url;
+        return jsonResponse(200, { id: `${PAGE_ID}_carousel_post` });
+      }
+      return jsonResponse(500, {});
+    });
+    const adapterCarousel = new RealFacebookAdapter();
+    const carouselResult = await adapterCarousel.publishPost(input({
+      media: [
+        { id: "m1", postId: "post-1", url: "https://x/a.png", type: "IMAGE", mimeType: "image/png", sizeBytes: 1, width: null, height: null, order: 0 },
+        { id: "m2", postId: "post-1", url: "https://x/b.png", type: "IMAGE", mimeType: "image/png", sizeBytes: 1, width: null, height: null, order: 1 },
+        { id: "m3", postId: "post-1", url: "https://x/c.png", type: "IMAGE", mimeType: "image/png", sizeBytes: 1, width: null, height: null, order: 2 },
+      ],
+    }));
+    assert.equal(carouselResult.ok, true);
+    if (carouselResult.ok) {
+      assert.equal(carouselResult.publishedUrl, `https://www.facebook.com/${PAGE_ID}_carousel_post`);
+    }
+    assert.equal(photoCalled, 3, "one unpublished photo per carousel item");
+    assert.ok(feedCaptured, "feed call with attached_media made");
+    const feed = feedCaptured as URL;
+    assert.equal(feed.searchParams.get("message"), "Hello from OmniPost");
+    assert.equal(feed.searchParams.get("attached_media[0]"), JSON.stringify({ media_fbid: "fbid_1" }));
+    assert.equal(feed.searchParams.get("attached_media[1]"), JSON.stringify({ media_fbid: "fbid_2" }));
+    assert.equal(feed.searchParams.get("attached_media[2]"), JSON.stringify({ media_fbid: "fbid_3" }));
+    restoreCarousel();
+  }
+
   // --- Analytics throws (deferred to a later phase) ---
   try {
     await adapter.fetchAnalytics({

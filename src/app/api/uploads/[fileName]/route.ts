@@ -1,10 +1,10 @@
 import { getAuthenticatedUser } from "@/lib/auth";
-import { LocalMediaStorage } from "@/lib/storage/local";
+import { getMediaStorage } from "@/lib/storage";
 import { createUploadRouteHandlers } from "@/lib/uploads/route-handlers";
 
 const handlers = createUploadRouteHandlers({
   getAuthenticatedUser,
-  storage: new LocalMediaStorage(),
+  storage: getMediaStorage(),
 });
 
 export async function GET(

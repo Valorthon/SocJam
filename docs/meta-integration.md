@@ -1,8 +1,8 @@
 # Phase 2a — Meta (Facebook + Instagram) Integration Guide
 
-This phase wires up **real Meta Graph API OAuth** for Facebook and Instagram account connection, plus **real Facebook Page publishing**. Instagram account connection also goes through real OAuth, but **Instagram publishing stays on the mock adapter** in this phase — see [Why Instagram publish is deferred](#why-instagram-publish-is-deferred) below.
+This phase wires up **real Meta Graph API OAuth** for Facebook and Instagram account connection, plus **real Facebook Page publishing** and **real Instagram image + carousel publishing**. Instagram publishing requires a publicly-fetchable media URL, so it ships behind the Vercel Blob MediaStorage impl — see [Instagram publishing (real Graph API)](#instagram-publishing-real-graph-api) below.
 
-The architecture is unchanged from the MVP seam: every platform interaction still goes through the `SocialPlatformAdapter` interface. The registry routes Facebook to either the mock or `RealFacebookAdapter` based on the `FACEBOOK_ADAPTER` env flag (or auto-detect from `META_APP_ID` + `META_APP_SECRET`), with no change to feature code. Instagram connect uses the same Meta OAuth flow, but `getPlatformAdapter("INSTAGRAM")` always resolves to the mock adapter in this phase.
+The architecture is unchanged from the MVP seam: every platform interaction still goes through the `SocialPlatformAdapter` interface. The registry routes Facebook to either the mock or `RealFacebookAdapter` and Instagram to either the mock or `RealInstagramAdapter` based on the per-platform adapter env flag (or auto-detect from `META_APP_ID` + `META_APP_SECRET`), with no change to feature code. Instagram publishing additionally needs `BLOB_READ_WRITE_TOKEN` so Media URLs are publicly fetchable; without it Instagram publish will reject the media (`Instagram could not process this media`), while non-IG flows keep working on local-disk storage.
 
 The Meta integration reuses the **same infrastructure** introduced by the LinkedIn integration on `main`:
 
@@ -62,7 +62,7 @@ INSTAGRAM_ADAPTER="real"
 
 Or omit those lines and let OmniPost **auto-detect**: if `META_APP_ID` + `META_APP_SECRET` are both set, `isFacebookRealEnabled()` and `isInstagramRealEnabled()` return `true`. Explicit `"mock"` overrides auto-detect.
 
-`INSTAGRAM_ADAPTER="real"` makes the accounts page route Instagram connect through the real Meta OAuth flow (same handshake as Facebook). However, `getPlatformAdapter("INSTAGRAM")` **always returns the mock adapter** in this phase regardless of the flag — Instagram publishing is deferred (see [Why Instagram publish is deferred](#why-instagram-publish-is-deferred)).
+`INSTAGRAM_ADAPTER="real"` makes the accounts page route Instagram connect through the real Meta OAuth flow (same handshake as Facebook) **and** routes publishing through `RealInstagramAdapter` (the two-step container flow). Real Instagram publishing additionally requires `BLOB_READ_WRITE_TOKEN` so the media URL is publicly fetchable by Meta. Leave `INSTAGRAM_ADAPTER="mock"` to keep both connect and publish on the mock (e.g. for local dev without a Blob store).
 
 ## 5. Test the OAuth flow
 
@@ -179,7 +179,7 @@ Follow §1–5 first. Then:
 4. In your browser: `/settings/accounts` → **Facebook** → facebook.com consent screen → `/settings/accounts/pick-page` → choose a Page → back to `/settings/accounts` with a success toast. A new row should appear with the Page name as the handle.
 5. Repeat for Instagram: **Add platform → Instagram** → same Meta consent → picker only shows Pages with an IG business account → pick one → new IG row appears with the IG `@username` handle.
 6. `/compose` → type text → select the Facebook Page target → **Publish now**. The post-detail target row should show `Published` with a real permalink like `https://www.facebook.com/<pageId>_<postId>`. Verify on the real Page in a separate tab.
-7. Publish an Instagram target too — it resolves to `https://mock.instagram.local/post/...` by design (see §"Why Instagram publish is deferred"). The row still goes to `Published` and the account row remains active.
+7. Publish an Instagram target with **at least one image attached** (Instagram requires media). With `INSTAGRAM_ADAPTER=real` + `BLOB_READ_WRITE_TOKEN` set, the publish goes through the real two-step Graph container flow and the target row shows a permalink like `https://www.instagram.com/p/<shortcode>/`. Without `BLOB_READ_WRITE_TOKEN` the real adapter returns a retryable "could not process this media" error (Meta cannot fetch a localhost image) — set the Blob token before publishing for real. With `INSTAGRAM_ADAPTER=mock` it resolves to `https://mock.instagram.local/post/...` by design.
 
 If the OAuth redirect fails, the URL returns to `/settings/accounts?success=<platform>` on success or `/settings/accounts?oauth_error=<code>` on failure. The error codes and their meanings are mapped in a toast inside `src/app/(app)/settings/accounts/page.tsx`:
 
@@ -233,21 +233,33 @@ Main's `tests/token-crypto.test.ts` covers the crypto module's round trips. To v
 2. `pnpm prisma studio` → open the `SocialAccount` table → the `accessToken` and `refreshToken` columns start with `enc:` (the `src/lib/tokens/crypto.ts` prefix) and **do not contain** the plaintext Page/user token. You should not be able to read `EAA…` in them.
 3. Drop `TOKEN_ENCRYPTION_KEY` from `.env`, restart `pnpm dev`, attempt to publish. The decrypt call will fail and the target will be marked `FAILED` ("Reconnect your Facebook account…") — confirming the persisted tokens are useless without the key.
 
-## Why Instagram publish is deferred
+## Instagram publishing (real Graph API)
 
 Instagram's Graph API requires **every post to include a publicly-fetchable image URL**. Meta's servers fetch that URL; it cannot be local-only (so your browser can reach `localhost:3000/api/uploads/x.jpg`, but Meta's crawler cannot).
 
-OmniPost's current `MediaStorage` implementation is local disk. Phase 2a deliberately does not introduce a new dependency to the locked tech stack. Once an S3-compatible / Vercel Blob / Cloudflare R2 `MediaStorage` implementation lands, the `RealInstagramAdapter` will arrive in the same shape as `RealFacebookAdapter`:
+To satisfy that requirement OmniPost added a public MediaStorage backend alongside the existing local-disk one:
 
-- `publishPost` will `POST /{ig-bus-acct-id}/media` with `image_url=<public URL>` then `POST /{ig-bus-acct-id}/media_publish` once the container is ready.
-- `checkAuth` will `GET /{ig-bus-acct-id}?fields=username`.
-- `fetchAnalytics` will hit `/{ig-bus-acct-id}/insights`.
+- **`BLOB_READ_WRITE_TOKEN`** — when set, `getMediaStorage()` (`src/lib/storage/index.ts`) returns `VercelBlobMediaStorage`; uploads persist to a public Vercel Blob store and `MediaAsset.url` becomes the fetchable Blob URL. When unset, the local-disk impl remains in effect for dev and non-IG flows.
+- The upload route (`src/lib/uploads/route-handlers.ts`) prefers `saved.publicUrl` when the storage provides it, falling back to the auth-gated `/api/uploads/{fileName}` local URL.
 
-Until then, Instagram's `publishPost` keeps returning the mock URL `https://mock.instagram.local/post/...` even after a real OAuth connect — by design.
+`RealInstagramAdapter` (`src/lib/platforms/adapters/realInstagram.ts`) follows the same shape as `RealFacebookAdapter`, sharing the Meta Graph helpers + opportunistic token refresh via `metaGraph.ts`:
+
+- `publishPost` runs the two-step Instagram container flow:
+  - **Single image:** `POST /{ig-bus-acct-id}/media?image_url=<publicUrl>&caption=<text>` → container id.
+  - **Carousel (2–10 images):** upload each as an unpublished item (`POST /media?image_url=...&is_carousel_item=true`), then `POST /media?media_type=CAROUSEL&children=<id1>,<id2>,...&caption=<text>` → parent container id.
+  - Poll `GET /{containerId}?fields=status_code` until `FINISHED`/`ERROR` (or timeout — configurable via the adapter's `pollIntervalMs`/`pollMaxAttempts` deps, capped at 30s default). On timeout/error it returns `retryable:true` rather than producing a partial post.
+  - `POST /{ig-bus-acct-id}/media_publish?creation_id=<containerId>` → media id, then `GET /{mediaId}?fields=permalink` for the canonical published URL.
+- `checkAuth` is `GET /{ig-bus-acct-id}?fields=username`.
+- `fetchAnalytics` throws `AnalyticsNotImplementedError("Instagram")` (deferred — IG insights land with the analytics refresh phase).
+- Reels/video and IG-TV are **out of scope** this phase — image + image-carousel only. `constraints.ts` already advertises mp4 support for a future Reels adapter; no constraint change is needed to enable them later.
+
+`getPlatformAdapter("INSTAGRAM")` returns `realInstagramAdapter` whenever `isInstagramRealEnabled()` is true (same flag that already drives connect mode) — the deferral branch has been removed from `registry.ts`.
+
+Facebook image publishing was also extended in the same pass: `RealFacebookAdapter.publishPost` now branches on media count — text-only `/feed` for 0 media, `/photos` for a single image, and multi-photo carousel via unpublished `/photos` calls feeding `attached_media` into `/feed`. Video stays out of scope.
 
 ## Architectural notes
 
-- **Per-platform dispatch.** `src/lib/platforms/registry.ts` resolves a platform's adapter at call time. For Facebook: `isFacebookRealEnabled()` → `realFacebookAdapter`, else mock. For LinkedIn: `isLinkedInRealEnabled()` → `linkedInAdapter`, else mock. For Instagram: always the mock adapter (real OAuth for connect only). All other platforms stay mock. The global `MOCK_PLATFORMS=true` flag remains the fallback gate for mock adapters.
+- **Per-platform dispatch.** `src/lib/platforms/registry.ts` resolves a platform's adapter at call time. For Facebook: `isFacebookRealEnabled()` → `realFacebookAdapter`, else mock. For LinkedIn: `isLinkedInRealEnabled()` → `linkedInAdapter`, else mock. For Instagram: `isInstagramRealEnabled()` → `realInstagramAdapter`, else mock. All other platforms stay mock. The global `MOCK_PLATFORMS=true` flag remains the fallback gate for mock adapters.
 - **Connect mode is server-side.** `GET /api/accounts/connect-mode` is the source of truth for which adapter each platform should use in the connect UI. It runs `is*RealEnabled()` on the server (where env vars are loaded) and returns `{ modes: { FACEBOOK: "real", ... } }`. Client components (`accounts page`, `OnboardingAccountList`) fetch this via `useConnectMode()` (TanStack Query) and branch on the response. Direct client-side imports of `is*RealEnabled()` would resolve to `undefined` in the browser because `FACEBOOK_ADAPTER` / `META_APP_ID` / etc. are not `NEXT_PUBLIC_`.
 - **Config detection.** `src/lib/platforms/config.ts` exports `isFacebookRealEnabled()` / `isInstagramRealEnabled()` mirroring `isLinkedInRealEnabled()`. Each reads `<PLATFORM>_ADAPTER` (or `NEXT_PUBLIC_<PLATFORM>_ADAPTER` for client-side); `"real"`/`"mock"` win over auto-detect; unset falls back to auto-detect from `META_APP_ID` + `META_APP_SECRET`.
 - **Token storage.** `SocialAccount.accessToken` holds the **encrypted** Page access token; `refreshToken` holds the encrypted long-lived user token; `expiresAt` is the user-token expiry; `platformUserId` is the Page ID (or IG business-account ID). The whole key envelope is `enc:<iv>:<authTag>:<ciphertext>` (base64url) — see `src/lib/tokens/crypto.ts` (shared with LinkedIn).
@@ -256,9 +268,9 @@ Until then, Instagram's `publishPost` keeps returning the mock URL `https://mock
 - **Idempotency is unchanged.** The atomic `SCHEDULED → PUBLISHING` claim in `queue/publisher.ts` is still the only place that prevents duplicate publishes. The real adapter does **not** dedupe — a repeated `publishPost` with the same target *would* produce two platform posts, which is why the publisher's atomic claim must stay intact; do not move that gate into adapters.
 - **Opportunistic + cron refresh (defense-in-depth).** `RealFacebookAdapter.ensureFreshToken()` mirrors LinkedIn's pattern: refresh the long-lived user token in `checkAuth` when within 5 minutes of expiry. The `/api/cron/refresh-tokens` route is the safety net with a 7-day scan window — catches tokens that haven't been exercised in a while.
 
-## Future phases (out of scope for 2a)
+## Future phases (out of scope)
 
-- Real Instagram publishing (once MediaStorage supports public URLs).
-- Real X / TikTok adapters (same shape as FB and LinkedIn).
+- Real Instagram **Reels/video** publishing (the image + image-carousel flow is shipped; the Reels `media_type=REELS` flow is a future addition).
+- Real X / TikTok adapters (same shape as Facebook/Instagram and LinkedIn).
 - Webhook-based analytics sync (instead of the manual refresh button).
 - Page-list caching across sessions (currently per-OAuth-flow only).
