@@ -89,7 +89,7 @@ function LoginForm() {
           <h1>
             <Image
               src="/branding/logo-light.svg"
-              alt="OmniPost"
+              alt="SocJam"
               width={60}
               height={60}
               className="size-[60px]"

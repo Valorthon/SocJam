@@ -21,7 +21,7 @@ function getEncryptionKey(): Buffer {
   }
 
   // Derive a 32-byte key from an arbitrary secret using scrypt.
-  return scryptSync(normalized, "omnipost-token-salt", KEY_LENGTH);
+  return scryptSync(normalized, "socjam-token-salt", KEY_LENGTH);
 }
 
 function toBase64(buffer: Buffer): string {

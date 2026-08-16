@@ -38,7 +38,7 @@ function getPageTitle(pathname: string): string {
   for (const [prefix, title] of Object.entries(PAGE_TITLES)) {
     if (pathname.startsWith(`${prefix}/`)) return title;
   }
-  return "OmniPost";
+  return "SocJam";
 }
 
 export function TopNav({ user }: TopNavProps) {

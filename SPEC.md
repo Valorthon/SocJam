@@ -1,6 +1,6 @@
-# App Specification: OmniPost — Centralized Social Media Control Hub
+# App Specification: SocJam — Centralized Social Media Control Hub
 
-> Working title "OmniPost" — rename freely. This spec is written to be handed to an AI coding agent. It is deliberately explicit about architecture, failure modes, and where files go.
+> Working title "SocJam" — rename freely. This spec is written to be handed to an AI coding agent. It is deliberately explicit about architecture, failure modes, and where files go.
 
 ---
 

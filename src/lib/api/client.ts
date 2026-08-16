@@ -65,7 +65,7 @@ export async function requestJson<T>(
     });
   } catch {
     throw new ApiError(
-      "Unable to reach OmniPost. Check your connection and try again.",
+      "Unable to reach SocJam. Check your connection and try again.",
       0,
     );
   }
@@ -98,7 +98,7 @@ export async function requestNoContent(
     });
   } catch {
     throw new ApiError(
-      "Unable to reach OmniPost. Check your connection and try again.",
+      "Unable to reach SocJam. Check your connection and try again.",
       0,
     );
   }

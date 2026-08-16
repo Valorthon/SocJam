@@ -4,7 +4,7 @@ import argon2 from "argon2";
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = "dev@omnipost.local";
+  const email = "dev@socjam.local";
 
   const existing = await prisma.user.findUnique({
     where: { email },

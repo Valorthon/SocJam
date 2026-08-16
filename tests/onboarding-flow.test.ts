@@ -32,7 +32,7 @@ async function run(): Promise<void> {
   const calls: string[] = [];
   const successfulSignup = await completeSignupFlow(
     {
-      name: "OmniPost User",
+      name: "SocJam User",
       email: "user@example.com",
       password: "password123",
       confirmPassword: "password123",
@@ -80,7 +80,7 @@ async function run(): Promise<void> {
 
   const failedLogin = await completeSignupFlow(
     {
-      name: "OmniPost User",
+      name: "SocJam User",
       email: "user@example.com",
       password: "password123",
       confirmPassword: "password123",

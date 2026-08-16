@@ -1,7 +1,7 @@
-# OmniPost Gap Analysis
+# SocJam Gap Analysis
 
 > Generated: 2026-08-14
-> Reference: `SPEC.md` (OmniPost — Centralized Social Media Control Hub)
+> Reference: `SPEC.md` (SocJam — Centralized Social Media Control Hub)
 > Scope: compare current codebase against SPEC.md and identify missing or incomplete features.
 
 ## TL;DR

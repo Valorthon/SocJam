@@ -40,7 +40,7 @@ export default function HomePage() {
       <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[38rem] bg-[radial-gradient(ellipse_70%_45%_at_50%_-10%,rgba(255,255,255,0.10),transparent)]" />
 
       <header className="relative z-10 mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-10">
-        <Link href="/" className="flex items-center gap-2.5" aria-label="OmniPost home">
+        <Link href="/" className="flex items-center gap-2.5" aria-label="SocJam home">
           <BrandMark />
         </Link>
 
@@ -64,7 +64,7 @@ export default function HomePage() {
               <span className="block text-white/45">without being everywhere.</span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">
-              OmniPost helps social teams create, adapt, and publish on every channel — all from one focused workspace.
+              SocJam helps social teams create, adapt, and publish on every channel — all from one focused workspace.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild size="lg" className="h-12 rounded-full px-6 text-sm">

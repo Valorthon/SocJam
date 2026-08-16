@@ -34,7 +34,7 @@ assert.match(footer, /All rights reserved\./);
 assert.match(brandMark, /src="\/branding\/logo-light\.svg"/);
 assert.match(brandMark, /width=\{60\}/);
 assert.match(brandMark, /height=\{60\}/);
-assert.doesNotMatch(productPreview, /<BrandMark\s*\/>\s*OmniPost/);
+assert.doesNotMatch(productPreview, /<BrandMark\s*\/>\s*SocJam/);
 assert.match(productPreview, /FaXTwitter/);
 assert.match(productPreview, /FaFacebookF/);
 assert.match(productPreview, /FaInstagram/);
@@ -47,7 +47,7 @@ assert.match(platformIcon, /FaTiktok/);
 assert.match(platformIcon, /FaLinkedinIn/);
 assert.match(loginPage, /src="\/branding\/logo-light\.svg"/);
 assert.match(signupPage, /src="\/branding\/logo-light\.svg"/);
-assert.doesNotMatch(sidebarContent, /<span className="font-semibold tracking-tight">OmniPost<\/span>/);
+assert.doesNotMatch(sidebarContent, /<span className="font-semibold tracking-tight">SocJam<\/span>/);
 assert.match(
   sidebarContent,
   /<Link href="\/dashboard"[\s\S]*?src="\/branding\/logo-light\.svg"/,

@@ -42,7 +42,7 @@ async function run(): Promise<void> {
   await mkdir(uploadDir, { recursive: true });
 
   const imageFileName = `${randomUUID()}.png`;
-  const imageUrl = `https://omnipost.local/api/uploads/${imageFileName}`;
+  const imageUrl = `https://socjam.local/api/uploads/${imageFileName}`;
   await writeFile(path.join(uploadDir, imageFileName), Buffer.from("fake-image"));
 
   const image: MediaAsset = {

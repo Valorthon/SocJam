@@ -42,7 +42,7 @@ const loadedDraft: PostDetailDto = {
       account: {
         id: xAccount.id,
         platform: "X",
-        handle: "@omnipost",
+        handle: "@socjam",
         status: "ACTIVE",
         scheduledTargetCount: 0,
       },
@@ -72,7 +72,7 @@ async function run(): Promise<void> {
   assert.notEqual(useComposerStore.getState().idempotencyKey, initialKey);
   const draftKey = useComposerStore.getState().idempotencyKey;
 
-  useComposerStore.getState().setBaseText("OmniPost is ready to publish.");
+  useComposerStore.getState().setBaseText("SocJam is ready to publish.");
   useComposerStore.getState().selectAccount(xAccount);
   useComposerStore.getState().selectAccount(linkedInAccount);
 
@@ -88,17 +88,17 @@ async function run(): Promise<void> {
   ]);
   assert.equal(
     useComposerStore.getState().variants[xAccount.id]?.adaptedText,
-    "OmniPost is ready to publish.",
+    "SocJam is ready to publish.",
   );
 
-  useComposerStore.getState().setBaseText("OmniPost is ready for every channel.");
+  useComposerStore.getState().setBaseText("SocJam is ready for every channel.");
   assert.equal(
     useComposerStore.getState().variants[xAccount.id]?.adaptedText,
-    "OmniPost is ready for every channel.",
+    "SocJam is ready for every channel.",
   );
 
   useComposerStore.getState().setVariantText(xAccount.id, "A concise X post.");
-  useComposerStore.getState().setBaseText("OmniPost ships another update.");
+  useComposerStore.getState().setBaseText("SocJam ships another update.");
 
   assert.deepEqual(useComposerStore.getState().variants[xAccount.id], {
     accountId: xAccount.id,
@@ -109,7 +109,7 @@ async function run(): Promise<void> {
   });
   assert.equal(
     useComposerStore.getState().variants[linkedInAccount.id]?.adaptedText,
-    "OmniPost ships another update.",
+    "SocJam ships another update.",
   );
 
   useComposerStore

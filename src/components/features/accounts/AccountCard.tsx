@@ -103,7 +103,7 @@ export function AccountCard({ platform, account, onConnect }: AccountCardProps) 
             <DialogHeader>
               <DialogTitle>Disconnect {details.name}?</DialogTitle>
               <DialogDescription>
-                OmniPost will lose access to {account.handle}.{" "}
+                SocJam will lose access to {account.handle}.{" "}
                 {account.scheduledTargetCount > 0
                   ? `This will cancel ${account.scheduledTargetCount} scheduled ${account.scheduledTargetCount === 1 ? "post" : "posts"}.`
                   : "You can reconnect this account later."}

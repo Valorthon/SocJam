@@ -15,7 +15,7 @@ const account: SocialAccount = {
   id: "account-1",
   userId,
   platform: "X",
-  handle: "@omnipost",
+  handle: "@socjam",
   accessToken: "mock-token",
   refreshToken: null,
   expiresAt: null,
@@ -34,7 +34,7 @@ function postFixture(
   return {
     id: "post-1",
     userId: ownerId,
-    baseText: "Hello from OmniPost",
+    baseText: "Hello from SocJam",
     status,
     scheduledAt,
     idempotencyKey,
@@ -50,7 +50,7 @@ function postFixture(
       postId: "post-1",
       accountId: account.id,
       platform: "X",
-      adaptedText: "Hello from OmniPost",
+      adaptedText: "Hello from SocJam",
       status: status === "SCHEDULED" ? "SCHEDULED" : "DRAFT",
       scheduledAt,
       publishedAt: null,
@@ -68,7 +68,7 @@ function request(idempotencyKey = key, media: MediaInput[] = []): Request {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       idempotencyKey,
-      baseText: "Hello from OmniPost",
+      baseText: "Hello from SocJam",
       targets: [{ accountId: account.id }],
       media,
     }),
@@ -116,7 +116,7 @@ async function run(): Promise<void> {
   assert.equal(malformed.status, 400);
 
   const media: MediaInput[] = [{
-    url: "https://omnipost.local/api/uploads/image.png",
+    url: "https://socjam.local/api/uploads/image.png",
     type: "IMAGE",
     mimeType: "image/png",
     sizeBytes: 1024,

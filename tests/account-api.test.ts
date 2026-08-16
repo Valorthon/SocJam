@@ -92,7 +92,7 @@ async function run(): Promise<void> {
   const createResponse = await accountHandlers.POST(
     new Request("http://localhost/api/accounts", {
       method: "POST",
-      body: JSON.stringify({ platform: "X", handle: "@omnipost" }),
+      body: JSON.stringify({ platform: "X", handle: "@socjam" }),
       headers: { "content-type": "application/json" },
     }),
   );
@@ -101,7 +101,7 @@ async function run(): Promise<void> {
     account: {
       id: removableAccountId,
       platform: "X",
-      handle: "@omnipost",
+      handle: "@socjam",
       status: "ACTIVE",
       scheduledTargetCount: 0,
     },
@@ -114,7 +114,7 @@ async function run(): Promise<void> {
   const duplicateResponse = await accountHandlers.POST(
     new Request("http://localhost/api/accounts", {
       method: "POST",
-      body: JSON.stringify({ platform: "X", handle: "@omnipost" }),
+      body: JSON.stringify({ platform: "X", handle: "@socjam" }),
       headers: { "content-type": "application/json" },
     }),
   );

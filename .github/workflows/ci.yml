@@ -16,19 +16,19 @@ jobs:
     env:
       AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
       AUTH_URL: http://localhost:3000
-      DATABASE_URL: postgresql://omnipost:omnipost@localhost:5432/omnipost?schema=public
+      DATABASE_URL: postgresql://socjam:socjam@localhost:5432/socjam?schema=public
 
     services:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: omnipost
-          POSTGRES_USER: omnipost
-          POSTGRES_PASSWORD: omnipost
+          POSTGRES_DB: socjam
+          POSTGRES_USER: socjam
+          POSTGRES_PASSWORD: socjam
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U omnipost -d omnipost"
+          --health-cmd "pg_isready -U socjam -d socjam"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5

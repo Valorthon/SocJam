@@ -50,7 +50,7 @@ export function ProductPreview() {
               <span className="size-2 rounded-full bg-white/15" />
             </div>
             <div className="mx-auto hidden rounded bg-white/[0.045] px-16 py-1 font-mono text-[9px] text-muted-foreground sm:block">
-              omnipost.app/compose
+              socjam.up.railway.app/compose
             </div>
           </div>
           <div className="grid min-h-[300px] sm:min-h-[390px] md:grid-cols-[144px_1fr]">

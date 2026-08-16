@@ -42,7 +42,7 @@ async function run(): Promise<void> {
   await mkdir(uploadDir, { recursive: true });
 
   const videoFileName = `${randomUUID()}.mp4`;
-  const videoUrl = `https://omnipost.local/api/uploads/${videoFileName}`;
+  const videoUrl = `https://socjam.local/api/uploads/${videoFileName}`;
   await writeFile(path.join(uploadDir, videoFileName), Buffer.from("fake-video"));
 
   const video: MediaAsset = {

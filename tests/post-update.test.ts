@@ -12,7 +12,7 @@ const account: SocialAccount = {
   id: "account-1",
   userId,
   platform: "X",
-  handle: "@omnipost",
+  handle: "@socjam",
   accessToken: "mock-token",
   refreshToken: null,
   expiresAt: null,

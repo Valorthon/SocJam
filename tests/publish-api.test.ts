@@ -8,7 +8,7 @@ const account: SocialAccount = {
   id: "account-1",
   userId: "user-1",
   platform: "X",
-  handle: "@omnipost",
+  handle: "@socjam",
   accessToken: "token",
   refreshToken: null,
   expiresAt: null,

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Restore OpenAI as OmniPost's default AI provider while retaining Groq as an
+Restore OpenAI as SocJam's default AI provider while retaining Groq as an
 explicit, interchangeable provider for the proof of concept.
 
 ## Provider selection

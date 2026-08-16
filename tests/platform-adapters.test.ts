@@ -7,7 +7,7 @@ const activeAccount: SocialAccount = {
   id: "account-1",
   userId: "user-1",
   platform: "X",
-  handle: "@omnipost",
+  handle: "@socjam",
   accessToken: "mock-token",
   refreshToken: null,
   expiresAt: null,
@@ -21,7 +21,7 @@ const publishedTarget: PostTarget = {
   postId: "post-1",
   accountId: activeAccount.id,
   platform: "X",
-  adaptedText: "Hello from OmniPost",
+  adaptedText: "Hello from SocJam",
   status: "PUBLISHED",
   scheduledAt: null,
   publishedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -30,7 +30,7 @@ const publishedTarget: PostTarget = {
   attempts: 1,
 };
 
-function createInput(targetId: string, text = "Hello from OmniPost"): PublishInput {
+function createInput(targetId: string, text = "Hello from SocJam"): PublishInput {
   return {
     targetId,
     idempotencyKey: "123e4567-e89b-12d3-a456-426614174000",
@@ -43,7 +43,7 @@ function createInput(targetId: string, text = "Hello from OmniPost"): PublishInp
 const image: MediaAsset = {
   id: "media-1",
   postId: "post-1",
-  url: "https://omnipost.local/api/uploads/image.jpg",
+  url: "https://socjam.local/api/uploads/image.jpg",
   type: "IMAGE",
   mimeType: "image/jpeg",
   sizeBytes: 1024,

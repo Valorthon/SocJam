@@ -122,7 +122,7 @@ function ConnectedAccountsPageInner() {
             Connected accounts
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Manage the social platforms OmniPost has access to.
+            Manage the social platforms SocJam has access to.
           </p>
         </div>
         <ConnectAccountButton
@@ -158,7 +158,7 @@ function ConnectedAccountsPageInner() {
             <section className="rounded-lg border border-dashed border-border bg-card px-4 py-5">
               <p className="font-medium">No accounts connected yet</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Connect a platform to start publishing from OmniPost.
+                Connect a platform to start publishing from SocJam.
               </p>
             </section>
           ) : null}
@@ -197,7 +197,7 @@ function ConnectedAccountsPageInner() {
           <DialogHeader>
             <DialogTitle>Add a platform</DialogTitle>
             <DialogDescription>
-              Choose a platform to connect it to OmniPost. LinkedIn and TikTok
+              Choose a platform to connect it to SocJam. LinkedIn and TikTok
               use real OAuth when credentials are configured.
             </DialogDescription>
           </DialogHeader>

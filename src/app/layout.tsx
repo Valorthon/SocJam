@@ -16,7 +16,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "OmniPost",
+  title: "SocJam",
   description: "Centralized social media control hub",
 };
 
